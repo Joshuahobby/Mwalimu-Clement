@@ -29,16 +29,34 @@ import {
   BarChart3,
   Tags,
   LogOut,
+  Search,
+  Filter,
+  Download,
+  Upload,
 } from "lucide-react";
 import { useState } from "react";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type AdminSection = "users" | "questions" | "pricing" | "payments" | "analytics" | "settings";
+
+const ITEMS_PER_PAGE = 10;
 
 export default function AdminPage() {
   const { user, logoutMutation } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [activeSection, setActiveSection] = useState<AdminSection>("questions");
+
+  // Questions management state
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   if (!user?.isAdmin) {
     setLocation("/");
@@ -59,6 +77,23 @@ export default function AdminPage() {
     queryKey: ["/api/payments"],
     enabled: activeSection === "payments",
   });
+
+  // Extract unique categories from questions
+  const categories = [...new Set(questions?.map(q => q.category) || [])];
+
+  // Filter and paginate questions
+  const filteredQuestions = questions?.filter(question => {
+    const matchesSearch = question.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         question.category.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = !selectedCategory || question.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  }) || [];
+
+  const totalPages = Math.ceil(filteredQuestions.length / ITEMS_PER_PAGE);
+  const paginatedQuestions = filteredQuestions.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   // Question management form and mutations
   const form = useForm({
@@ -94,6 +129,45 @@ export default function AdminPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
     },
   });
+
+  const handleExport = () => {
+    const questionsJson = JSON.stringify(questions, null, 2);
+    const blob = new Blob([questionsJson], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'questions.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const questions = JSON.parse(e.target?.result as string);
+          // TODO: Implement bulk import API endpoint
+          await apiRequest("POST", "/api/questions/bulk", questions);
+          queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
+          toast({
+            title: "Success",
+            description: "Questions imported successfully",
+          });
+        } catch (error) {
+          toast({
+            title: "Error",
+            description: "Failed to import questions",
+            variant: "destructive",
+          });
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
 
   return (
     <SidebarProvider>
@@ -179,6 +253,58 @@ export default function AdminPage() {
         <main className="flex-1 p-6">
           {activeSection === "questions" && (
             <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4 flex-1">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Search questions..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <Select 
+                    value={selectedCategory} 
+                    onValueChange={setSelectedCategory}
+                  >
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Filter by category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">All Categories</SelectItem>
+                      {categories.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button onClick={handleExport} variant="outline">
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                  </Button>
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleImport}
+                      className="hidden"
+                      id="import-questions"
+                    />
+                    <Button 
+                      variant="outline"
+                      onClick={() => document.getElementById('import-questions')?.click()}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Import
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
               <Card>
                 <CardHeader>
                   <CardTitle>Add New Question</CardTitle>
@@ -255,7 +381,7 @@ export default function AdminPage() {
               </Card>
 
               <div className="grid gap-4">
-                {questions?.map((question) => (
+                {paginatedQuestions.map((question) => (
                   <Card key={question.id}>
                     <CardContent className="pt-6">
                       <div className="flex justify-between items-start">
@@ -287,6 +413,37 @@ export default function AdminPage() {
                   </Card>
                 ))}
               </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex justify-center gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <Button
+                        key={page}
+                        variant={currentPage === page ? "default" : "outline"}
+                        onClick={() => setCurrentPage(page)}
+                      >
+                        {page}
+                      </Button>
+                    ))}
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
