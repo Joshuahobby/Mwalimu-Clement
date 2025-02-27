@@ -35,7 +35,7 @@ import {
   Upload,
 } from "lucide-react";
 import { useState } from "react";
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -55,7 +55,7 @@ export default function AdminPage() {
 
   // Questions management state
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
 
   if (!user?.isAdmin) {
@@ -85,7 +85,7 @@ export default function AdminPage() {
   const filteredQuestions = questions?.filter(question => {
     const matchesSearch = question.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          question.category.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = !selectedCategory || question.category === selectedCategory;
+    const matchesCategory = selectedCategory === "all" || question.category === selectedCategory;
     return matchesSearch && matchesCategory;
   }) || [];
 
@@ -272,7 +272,7 @@ export default function AdminPage() {
                       <SelectValue placeholder="Filter by category" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Categories</SelectItem>
+                      <SelectItem value="all">All Categories</SelectItem>
                       {categories.map((category) => (
                         <SelectItem key={category} value={category}>
                           {category}
