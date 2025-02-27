@@ -1,0 +1,137 @@
+To focus on the Admin Dashboard for your Online Driving Theory Exams Test Web Application, here are the key features and functionalities that should be included:
+Admin Dashboard Features
+1. User Management
+View a list of registered users with details (e.g., name, email, subscription type, payment history).
+
+
+Search, filter, and sort users by name, subscription type, or activity.
+
+
+Reset user passwords or deactivate accounts if necessary.
+
+
+2. Question Management
+Add new questions with:
+
+
+Text-based or image-based content.
+
+
+Multiple-choice answers.
+
+
+Tags for categories (e.g., traffic rules, road signs).
+
+
+Edit or delete existing questions.
+
+
+Organize questions by category for better management.
+
+
+Preview how questions will appear to users.
+
+
+3. Subscription and Pricing Management
+View and edit pricing for:
+
+
+Single Exam (200 RWF)
+
+
+Daily Access (800 RWF)
+
+
+Weekly Access (4,000 RWF)
+
+
+Monthly Access (10,000 RWF)
+
+
+Create custom promotional packages or discounts.
+
+
+Monitor active subscriptions and expiration dates.
+
+
+4. Payment Management
+View payment history for all users.
+
+
+Integrate with payment gateways to track successful and failed transactions.
+
+
+Generate financial reports for specific periods (daily, weekly, monthly).
+
+
+5. Exam Analytics
+Monitor user performance:
+
+
+Average scores per exam.
+
+
+Time taken to complete exams.
+
+
+Frequently missed questions.
+
+
+Generate insights to improve the question pool or user experience.
+
+
+6. Accessibility Settings
+Customize accessibility options:
+
+
+Enable/disable read-aloud functionality for exams.
+
+
+Add new font options or color schemes.
+
+
+7. System Settings
+Configure exam rules:
+
+
+Number of questions per exam.
+
+
+Time limit for exams (default: 20 minutes).
+
+
+Enable/disable navigation options (e.g., previous/next question buttons).
+
+
+Set up notifications for users (e.g., subscription reminders).
+
+
+8. Dashboard Analytics Overview
+Display key metrics on the dashboard homepage:
+
+
+Total registered users.
+
+
+Active subscriptions by type.
+
+
+Total revenue generated.
+
+
+Number of exams taken within a specific period.
+
+
+Design Suggestions for Admin Dashboard
+Use a clean and intuitive layout with clear navigation menus.
+
+
+Include visual elements like charts and graphs for analytics (e.g., revenue trends, user activity).
+
+
+Ensure mobile responsiveness for admins to manage the system on-the-go.
+
+
+This Admin Dashboard will provide full control over the platform's operations while ensuring scalability and ease of use.
+Citations:
+https://pplx-res.cloudinary.com/image/upload/v1740672006/user_uploads/bLWZupkCPeHNYZz/image.jpg
