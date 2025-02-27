@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Question, insertQuestionSchema, User, Payment } from "@shared/schema";
 import { useForm } from "react-hook-form";
@@ -34,9 +35,7 @@ import {
   Download,
   Upload,
 } from "lucide-react";
-import { useState } from "react";
-import {
-  Select,
+import {  Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
@@ -117,13 +116,18 @@ export default function AdminPage() {
   const { user, logoutMutation } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const [activeSection, setActiveSection] = useState<AdminSection>("questions");
 
-  // Questions management state
+  // Move this useEffect to the top level
+  useEffect(() => {
+    if (!user?.isAdmin) {
+      setLocation("/");
+    }
+  }, [user, setLocation]);
+
+  const [activeSection, setActiveSection] = useState<AdminSection>("questions");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
-
   const [userSearchTerm, setUserSearchTerm] = useState("");
   const [userCurrentPage, setUserCurrentPage] = useState(1);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -131,13 +135,12 @@ export default function AdminPage() {
   const [isDeactivateOpen, setIsDeactivateOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
 
-
-  if (!user?.isAdmin) {
-    setLocation("/");
+  // Early return if no user or not admin, but after hooks
+  if (!user) {
     return null;
   }
 
-  // Queries for different sections
+  // Queries
   const { data: questions } = useQuery<Question[]>({
     queryKey: ["/api/questions"],
   });
@@ -918,19 +921,25 @@ export default function AdminPage() {
                           <TableCell>{payment.amount} RWF</TableCell>
                           <TableCell>{format(new Date(payment.createdAt), 'PPP')}</TableCell>
                           <TableCell>
-                            <Badge
-                              variant={
-                                payment.status === "completed"
-                                  ? "default"
-                                  : payment.status === "pending"
-                                  ? "secondary"
-                                  : payment.status === "failed"
-                                  ? "destructive"
-                                  : "outline"
+                            <Select
+                              value={payment.status}
+                              onValueChange={(status: PaymentStatus) =>
+                                updatePaymentStatusMutation.mutate({
+                                  paymentId: payment.id,
+                                  status,
+                                })
                               }
                             >
-                              {payment.status}
-                            </Badge>
+                              <SelectTrigger className="w-[130px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="completed">Completed</SelectItem>
+                                <SelectItem value="failed">Failed</SelectItem>
+                                <SelectItem value="refunded">Refunded</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </TableCell>
                           <TableCell>
                             <DropdownMenu>
