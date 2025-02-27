@@ -56,6 +56,31 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { format } from "date-fns";
 
 type AnalyticsData = {
   examCompletions: {
@@ -77,7 +102,14 @@ type AnalyticsData = {
   }[];
 };
 
+type UserStats = {
+  examAttempts: number;
+  successRate: number;
+  lastActive: string;
+};
+
 type AdminSection = "users" | "questions" | "pricing" | "payments" | "analytics" | "settings";
+type PaymentStatus = "pending" | "completed" | "failed" | "refunded";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -91,6 +123,14 @@ export default function AdminPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
+
+  const [userSearchTerm, setUserSearchTerm] = useState("");
+  const [userCurrentPage, setUserCurrentPage] = useState(1);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
+  const [isDeactivateOpen, setIsDeactivateOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+
 
   if (!user?.isAdmin) {
     setLocation("/");
@@ -117,6 +157,10 @@ export default function AdminPage() {
     enabled: activeSection === "analytics",
   });
 
+  const { data: userStats } = useQuery<Record<number, UserStats>>({
+    queryKey: ["/api/users/stats"],
+    enabled: activeSection === "users",
+  });
 
   // Extract unique categories from questions
   const categories = [...new Set(questions?.map(q => q.category) || [])];
@@ -170,6 +214,64 @@ export default function AdminPage() {
     },
   });
 
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ userId, password }: { userId: number; password: string }) => {
+      const res = await apiRequest("POST", `/api/users/${userId}/reset-password`, { password });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Password has been reset successfully",
+      });
+      setIsResetPasswordOpen(false);
+      setNewPassword("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deactivateUserMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      await apiRequest("POST", `/api/users/${userId}/deactivate`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "Success",
+        description: "User has been deactivated successfully",
+      });
+      setIsDeactivateOpen(false);
+      setSelectedUser(null);
+    },
+  });
+
+  const updatePaymentStatusMutation = useMutation({
+    mutationFn: async ({ paymentId, status }: { paymentId: number; status: PaymentStatus }) => {
+      const res = await apiRequest("PATCH", `/api/payments/${paymentId}`, { status });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
+      toast({
+        title: "Success",
+        description: "Payment status updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleExport = () => {
     const questionsJson = JSON.stringify(questions, null, 2);
     const blob = new Blob([questionsJson], { type: 'application/json' });
@@ -208,6 +310,17 @@ export default function AdminPage() {
       reader.readAsText(file);
     }
   };
+
+  // Filter and paginate users
+  const filteredUsers = users?.filter(user =>
+    user.username.toLowerCase().includes(userSearchTerm.toLowerCase())
+  ) || [];
+
+  const totalUserPages = Math.ceil((filteredUsers.length || 0) / ITEMS_PER_PAGE);
+  const paginatedUsers = filteredUsers.slice(
+    (userCurrentPage - 1) * ITEMS_PER_PAGE,
+    userCurrentPage * ITEMS_PER_PAGE
+  );
 
   return (
     <SidebarProvider>
@@ -304,8 +417,8 @@ export default function AdminPage() {
                       className="pl-10"
                     />
                   </div>
-                  <Select 
-                    value={selectedCategory} 
+                  <Select
+                    value={selectedCategory}
                     onValueChange={setSelectedCategory}
                   >
                     <SelectTrigger className="w-[200px]">
@@ -334,7 +447,7 @@ export default function AdminPage() {
                       className="hidden"
                       id="import-questions"
                     />
-                    <Button 
+                    <Button
                       variant="outline"
                       onClick={() => document.getElementById('import-questions')?.click()}
                     >
@@ -488,34 +601,184 @@ export default function AdminPage() {
           )}
 
           {activeSection === "users" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>User Management</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {users?.map((user) => (
-                    <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div>
-                        <p className="font-medium">{user.username}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Role: {user.isAdmin ? "Admin" : "User"}
-                        </p>
-                      </div>
-                      <div className="space-x-2">
-                        <Button variant="outline" size="sm">
-                          Reset Password
-                        </Button>
-                        <Button variant="destructive" size="sm">
-                          Deactivate
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+            <div className="space-y-6">
+              <div className="flex items-center gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search users..."
+                    value={userSearchTerm}
+                    onChange={(e) => setUserSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>User Management</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {paginatedUsers.map((user) => (
+                      <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <p className="font-medium">{user.username}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Role: {user.isAdmin ? "Admin" : "User"}
+                          </p>
+                          {userStats?.[user.id] && (
+                            <div className="mt-2 space-y-1">
+                              <p className="text-sm">
+                                Exam Attempts: {userStats[user.id].examAttempts}
+                              </p>
+                              <p className="text-sm">
+                                Success Rate: {userStats[user.id].successRate}%
+                              </p>
+                              <p className="text-sm">
+                                Last Active: {new Date(userStats[user.id].lastActive).toLocaleDateString()}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        <div className="space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedUser(user);
+                              setIsResetPasswordOpen(true);
+                            }}
+                          >
+                            Reset Password
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedUser(user);
+                              setIsDeactivateOpen(true);
+                            }}
+                          >
+                            Deactivate
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Pagination */}
+                  {totalUserPages > 1 && (
+                    <div className="flex justify-center gap-2 mt-4">
+                      <Button
+                        variant="outline"
+                        onClick={() => setUserCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={userCurrentPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <div className="flex items-center gap-2">
+                        {Array.from({ length: totalUserPages }, (_, i) => i + 1).map((page) => (
+                          <Button
+                            key={page}
+                            variant={userCurrentPage === page ? "default" : "outline"}
+                            onClick={() => setUserCurrentPage(page)}
+                          >
+                            {page}
+                          </Button>
+                        ))}
+                      </div>
+                      <Button
+                        variant="outline"
+                        onClick={() => setUserCurrentPage(p => Math.min(totalUserPages, p + 1))}
+                        disabled={userCurrentPage === totalUserPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           )}
+
+          {/* Reset Password Dialog */}
+          <Dialog open={isResetPasswordOpen} onOpenChange={setIsResetPasswordOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Reset Password</DialogTitle>
+                <DialogDescription>
+                  Enter a new password for {selectedUser?.username}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="py-4">
+                <Input
+                  type="password"
+                  placeholder="New password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsResetPasswordOpen(false);
+                    setNewPassword("");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (selectedUser) {
+                      resetPasswordMutation.mutate({
+                        userId: selectedUser.id,
+                        password: newPassword,
+                      });
+                    }
+                  }}
+                  disabled={resetPasswordMutation.isPending || !newPassword}
+                >
+                  Reset Password
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Deactivate User Dialog */}
+          <Dialog open={isDeactivateOpen} onOpenChange={setIsDeactivateOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Deactivate User</DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to deactivate {selectedUser?.username}? This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsDeactivateOpen(false);
+                    setSelectedUser(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    if (selectedUser) {
+                      deactivateUserMutation.mutate(selectedUser.id);
+                    }
+                  }}
+                  disabled={deactivateUserMutation.isPending}
+                >
+                  Deactivate
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {activeSection === "analytics" && (
             <div className="space-y-6">
@@ -626,8 +889,90 @@ export default function AdminPage() {
             </div>
           )}
 
-          {(activeSection === "pricing" || activeSection === "payments" || 
-            activeSection === "settings") && (
+          {activeSection === "payments" && (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Payment Management</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableCaption>List of all payments</TableCaption>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>ID</TableHead>
+                        <TableHead>User</TableHead>
+                        <TableHead>Package</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {payments?.map((payment) => (
+                        <TableRow key={payment.id}>
+                          <TableCell>{payment.id}</TableCell>
+                          <TableCell>{payment.username}</TableCell>
+                          <TableCell>{payment.packageType}</TableCell>
+                          <TableCell>{payment.amount} RWF</TableCell>
+                          <TableCell>{format(new Date(payment.createdAt), 'PPP')}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                payment.status === "completed"
+                                  ? "default"
+                                  : payment.status === "pending"
+                                  ? "secondary"
+                                  : payment.status === "failed"
+                                  ? "destructive"
+                                  : "outline"
+                              }
+                            >
+                              {payment.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  Actions
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    updatePaymentStatusMutation.mutate({
+                                      paymentId: payment.id,
+                                      status: "completed",
+                                    })
+                                  }
+                                >
+                                  Mark as Completed
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    updatePaymentStatusMutation.mutate({
+                                      paymentId: payment.id,
+                                      status: "refunded",
+                                    })
+                                  }
+                                >
+                                  Process Refund
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {(activeSection === "pricing" || activeSection === "settings") && (
             <Card>
               <CardHeader>
                 <CardTitle>{activeSection.charAt(0).toUpperCase() + activeSection.slice(1)}</CardTitle>
