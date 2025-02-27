@@ -37,7 +37,7 @@ export default function AdminPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: Question) => {
+    mutationFn: async (data: Omit<Question, "id">) => {
       const res = await apiRequest("POST", "/api/questions", data);
       return res.json();
     },
