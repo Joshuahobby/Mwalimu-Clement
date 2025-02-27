@@ -1,0 +1,163 @@
+Develop “ MWALIMU Clement “ an Online Driving Theory Exams Test Web Application  tailored for users preparing for the Rwanda National Police theory exam. Below are the detailed requirements:
+Key Features:
+Exam Functionality:
+
+
+The system should include a minimum of 20 randomized questions per exam.
+
+
+Each exam should last 20 minutes and automatically close when the time expires.
+
+
+Users can choose from four payment packages:
+
+
+Single Exam: 200 RWF
+
+
+Daily Access: 800 RWF
+
+
+Weekly Access: 4,000 RWF
+
+
+Monthly Access: 10,000 RWF
+
+
+Admin should have the ability to customize these package prices via a CMS.
+
+
+Question Management:
+
+
+Admin can add, edit, or delete questions through a CMS.
+Admin can upload/import bulk questions through a CMS .
+
+
+
+Questions should be categorized (e.g., traffic rules, road signs, etc.) to allow for better organization and randomization.
+
+
+Accessibility Options:
+
+
+Before starting the exam, users can select accessibility options:
+
+
+Exam read-aloud functionality.
+
+
+Dyslexia-friendly fonts.
+
+
+Customizable color schemes for better visibility.
+
+
+User Interface Features During Exams:
+
+
+Display remaining time.
+
+
+Show the current question number and total number of questions.
+
+
+Buttons for navigating to previous or next questions (when allowed).
+
+
+A toolkit with resources (e.g., marking a question for review).
+
+
+Overview screen to view all answered/unanswered questions (if allowed).
+
+
+Exit button to leave the exam.
+
+
+Payment Integration:
+
+
+Secure payment gateway to process payments for selected packages.
+
+
+Provide receipts upon successful payment.
+
+
+Simulation Environment:
+
+
+The system should simulate the Rwanda National Police theory exam experience as closely as possible.
+
+
+Admin Panel Features:
+Manage user accounts and view payment history.
+
+
+Add or update new question categories and questions.
+
+
+Customize pricing for all subscription packages.
+
+
+View analytics on user performance and participation.
+
+
+Additional Notes:
+Ensure the system is responsive and works on desktop and mobile devices.
+
+
+Include a demo mode where users can try a free sample test with limited questions.
+
+
+The system should log user activity and generate reports on their performance.
+
+
+Technical Requirements:
+Use a modern web framework (e.g., React.js/Node.js or Django) for development.
+
+
+Integrate a database (e.g., PostgreSQL or MongoDB) to store user data, questions, and results.
+
+
+Implement secure authentication for both users and admins.
+
+
+How Does It Work?
+Users log in or register to access the platform.
+
+
+They select a payment package and complete the transaction.
+
+
+After payment, they can take unlimited exams within their subscription period.
+
+
+Exams auto-close after 20 minutes, and results are displayed immediately after submission.
+
+
+Make sure the system is scalable, user-friendly, and adheres to best practices in web development."
+Citations:
+https://pplx-res.cloudinary.com/image/upload/v1740672006/user_uploads/bLWZupkCPeHNYZz/image.jpg
+https://www.driveright.nl/theory/theory-online/
+https://tecknotrove.com/industries/automobile/car-driving-simulator/
+https://www.conductexam.com/blog/online-quiz-test/
+https://examencentrum.nl/en/good-to-know/booking-a-cbr-theory-exam
+https://www.vector.com/dyna4/
+https://www.speedexam.net
+https://itheorie.nl/en/driving-licence/book-the-cbr-theory-exam
+https://xylon-lab.com/product-features/virtual-test-drive/
+https://www.addmengroup.com/exam-software/online-exam-system-modules.htm
+https://www.wegrijden.nl/en/
+https://www.vi-grade.com
+https://xbsoftware.com/products/examarius/
+https://www.reddit.com/r/Netherlands/comments/fw1oo3/driving_theory_learning_in_the_netherlands_what/
+https://www.eenewseurope.com/en/simulation-and-test-software-gets-new-features-for-virtual-test-driving/
+https://pesofts.com
+https://examencentrum.nl/en
+https://research.tudelft.nl/files/217407897/Advantages_and_Disadvantages_of_Driving.pdf
+https://www.classmarker.com
+https://www.theoriesnelhalen.nl/en/news-and-blogs/online-car-theory-course
+https://hexagon.com/products/virtual-test-drive
+
+
+
