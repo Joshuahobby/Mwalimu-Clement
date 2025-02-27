@@ -1,35 +1,45 @@
 import { User, InsertUser, Question, Exam, Payment, Settings, PackageType } from "@shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import { scrypt, randomBytes } from "crypto";
+import { promisify } from "util";
+import { log } from "./vite";
 
 const MemoryStore = createMemoryStore(session);
+const scryptAsync = promisify(scrypt);
+
+async function hashPassword(password: string) {
+  const salt = randomBytes(16).toString("hex");
+  const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+  return `${buf.toString("hex")}.${salt}`;
+}
 
 export interface IStorage {
   // User operations
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  
+
   // Question operations
   getQuestions(): Promise<Question[]>;
   getQuestionsByCategory(category: string): Promise<Question[]>;
   createQuestion(question: Omit<Question, "id">): Promise<Question>;
   updateQuestion(id: number, question: Partial<Question>): Promise<Question>;
   deleteQuestion(id: number): Promise<void>;
-  
+
   // Exam operations
   createExam(exam: Omit<Exam, "id">): Promise<Exam>;
   getExam(id: number): Promise<Exam | undefined>;
   updateExam(id: number, exam: Partial<Exam>): Promise<Exam>;
-  
+
   // Payment operations
   createPayment(payment: Omit<Payment, "id">): Promise<Payment>;
   getActivePayment(userId: number): Promise<Payment | undefined>;
-  
+
   // Settings operations
   getSetting(key: string): Promise<Settings | undefined>;
   setSetting(key: string, value: any): Promise<Settings>;
-  
+
   sessionStore: session.Store;
 }
 
@@ -50,8 +60,27 @@ export class MemStorage implements IStorage {
     this.settings = new Map();
     this.currentId = 1;
     this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000,
+      checkPeriod: 86400000, // Clear expired entries every 24h
     });
+
+    // Create default admin user
+    this.createDefaultAdmin();
+  }
+
+  private async createDefaultAdmin() {
+    try {
+      const adminPassword = await hashPassword("admin");
+      const admin: User = {
+        id: this.currentId++,
+        username: "admin",
+        password: adminPassword,
+        isAdmin: true,
+      };
+      this.users.set(admin.id, admin);
+      log("Default admin user created");
+    } catch (error) {
+      log(`Error creating default admin: ${error.message}`);
+    }
   }
 
   async getUser(id: number): Promise<User | undefined> {
@@ -68,6 +97,7 @@ export class MemStorage implements IStorage {
     const id = this.currentId++;
     const user: User = { ...insertUser, id, isAdmin: false };
     this.users.set(id, user);
+    log(`New user created: ${user.username}`);
     return user;
   }
 
