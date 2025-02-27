@@ -74,11 +74,6 @@ export default function HomePage() {
           <h1 className="text-2xl font-bold">MWALIMU Clement</h1>
           <div className="flex items-center gap-4">
             <span>Welcome, {user?.username}</span>
-            {user?.isAdmin && (
-              <Button variant="outline" onClick={() => setLocation("/admin")}>
-                Admin Panel
-              </Button>
-            )}
             <Button variant="outline" onClick={() => logoutMutation.mutate()}>
               Logout
             </Button>
