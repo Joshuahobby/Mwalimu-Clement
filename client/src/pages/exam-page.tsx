@@ -9,6 +9,7 @@ import Timer from "@/components/exam/timer";
 import QuestionNavigation from "@/components/exam/question-navigation";
 import AccessibilitySettings from "@/components/exam/accessibility-settings";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Loader2 } from "lucide-react";
 
 export default function ExamPage() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -16,11 +17,14 @@ export default function ExamPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
-  const { data: exam } = useQuery<Exam>({
+  // Fetch current exam
+  const { data: exam, isLoading: examLoading } = useQuery<Exam>({
     queryKey: ["/api/exams/current"],
+    retry: false,
   });
 
-  const { data: questions } = useQuery<Question[]>({
+  // Fetch questions based on exam data
+  const { data: questions, isLoading: questionsLoading } = useQuery<Question[]>({
     queryKey: ["/api/questions"],
     enabled: !!exam,
   });
@@ -49,14 +53,35 @@ export default function ExamPage() {
     }
   }, [exam]);
 
+  if (examLoading || questionsLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-border" />
+      </div>
+    );
+  }
+
   if (!exam || !questions) {
-    return <div>Loading...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <h1 className="text-2xl font-bold mb-4">No Active Exam</h1>
+        <p className="text-muted-foreground mb-4">
+          Please purchase an exam package to start a new exam.
+        </p>
+        <Button onClick={() => setLocation("/")}>Return to Dashboard</Button>
+      </div>
+    );
   }
 
   const currentQuestion = questions.find(q => q.id === exam.questions[currentQuestionIndex]);
 
   if (!currentQuestion) {
-    return <div>Question not found</div>;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <h1 className="text-2xl font-bold mb-4">Question Not Found</h1>
+        <Button onClick={() => setLocation("/")}>Return to Dashboard</Button>
+      </div>
+    );
   }
 
   const handleAnswer = (answerIndex: number) => {
