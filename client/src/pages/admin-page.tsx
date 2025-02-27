@@ -42,6 +42,40 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
+
+type AnalyticsData = {
+  examCompletions: {
+    date: string;
+    count: number;
+  }[];
+  failedQuestions: {
+    questionId: number;
+    question: string;
+    failureCount: number;
+  }[];
+  userRegistrations: {
+    date: string;
+    count: number;
+  }[];
+  examSuccessRate: {
+    name: string;
+    value: number;
+  }[];
+};
 
 type AdminSection = "users" | "questions" | "pricing" | "payments" | "analytics" | "settings";
 
@@ -77,6 +111,12 @@ export default function AdminPage() {
     queryKey: ["/api/payments"],
     enabled: activeSection === "payments",
   });
+
+  const { data: analyticsData } = useQuery<AnalyticsData>({
+    queryKey: ["/api/analytics"],
+    enabled: activeSection === "analytics",
+  });
+
 
   // Extract unique categories from questions
   const categories = [...new Set(questions?.map(q => q.category) || [])];
@@ -477,9 +517,117 @@ export default function AdminPage() {
             </Card>
           )}
 
-          {/* Other sections will be implemented progressively */}
+          {activeSection === "analytics" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Exam Completions</CardTitle>
+                  </CardHeader>
+                  <CardContent className="h-[300px]">
+                    <LineChart
+                      width={500}
+                      height={300}
+                      data={analyticsData?.examCompletions}
+                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Line
+                        type="monotone"
+                        dataKey="count"
+                        stroke="#8884d8"
+                        name="Completions"
+                      />
+                    </LineChart>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Most Failed Questions</CardTitle>
+                  </CardHeader>
+                  <CardContent className="h-[300px]">
+                    <BarChart
+                      width={500}
+                      height={300}
+                      data={analyticsData?.failedQuestions}
+                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="question" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="failureCount" fill="#82ca9d" name="Failures" />
+                    </BarChart>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>User Registrations</CardTitle>
+                  </CardHeader>
+                  <CardContent className="h-[300px]">
+                    <LineChart
+                      width={500}
+                      height={300}
+                      data={analyticsData?.userRegistrations}
+                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Line
+                        type="monotone"
+                        dataKey="count"
+                        stroke="#82ca9d"
+                        name="Registrations"
+                      />
+                    </LineChart>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Exam Success Rate</CardTitle>
+                  </CardHeader>
+                  <CardContent className="h-[300px]">
+                    <PieChart width={500} height={300}>
+                      <Pie
+                        data={analyticsData?.examSuccessRate}
+                        cx={250}
+                        cy={150}
+                        innerRadius={60}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        paddingAngle={5}
+                        dataKey="value"
+                        label
+                      >
+                        {analyticsData?.examSuccessRate.map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={index === 0 ? "#82ca9d" : "#ff8042"}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </PieChart>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
+
           {(activeSection === "pricing" || activeSection === "payments" || 
-            activeSection === "analytics" || activeSection === "settings") && (
+            activeSection === "settings") && (
             <Card>
               <CardHeader>
                 <CardTitle>{activeSection.charAt(0).toUpperCase() + activeSection.slice(1)}</CardTitle>
