@@ -317,8 +317,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Payment verification webhook
   app.post("/api/payments/verify", async (req, res) => {
     try {
-      const transactionId = req.body.transaction_id;
-      const transaction = await verifyPayment(transactionId);
+      console.log('Payment verification webhook received:', req.body);
+
+      const tx_ref = req.body.tx_ref || req.body.txRef;
+      if (!tx_ref) {
+        return res.status(400).json({ message: "Missing transaction reference" });
+      }
+
+      const transaction = await verifyPayment(tx_ref);
 
       if (transaction.status === "successful") {
         // Update payment status
@@ -328,18 +334,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: "completed",
             metadata: {
               ...req.body,
-              flutterwave_tx_id: transactionId
+              flutterwave_tx_ref: tx_ref
             }
           })
-          .where(eq(payments.metadata.flutterwave_tx_ref, transaction.tx_ref))
+          .where(eq(payments.metadata.tx_ref, tx_ref))
           .returning();
 
         if (!payment) {
+          console.error('Payment not found for tx_ref:', tx_ref);
           return res.status(404).json({ message: "Payment not found" });
         }
 
+        console.log('Payment completed successfully:', payment);
         res.json({ status: "success", payment });
       } else {
+        console.error('Payment verification failed. Status:', transaction.status);
         res.status(400).json({ message: "Payment verification failed" });
       }
     } catch (error) {

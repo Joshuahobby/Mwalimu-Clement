@@ -24,6 +24,15 @@ interface PaymentPayload {
   };
 }
 
+interface FlutterwaveResponse {
+  status: string;
+  message: string;
+  data: {
+    redirect?: string;
+    link?: string;
+  };
+}
+
 export async function initiatePayment(
   amount: number,
   user: User,
@@ -61,7 +70,7 @@ export async function initiatePayment(
   }
 
   try {
-    console.log('Initiating Rwanda Mobile Money payment with payload:', JSON.stringify(payload, null, 2));
+    console.log('Initiating payment with payload:', JSON.stringify(payload, null, 2));
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -73,10 +82,10 @@ export async function initiatePayment(
       body: JSON.stringify(payload)
     });
 
-    const data = await response.json();
+    const data = await response.json() as FlutterwaveResponse;
     console.log('Flutterwave response:', JSON.stringify(data, null, 2));
 
-    if (data.status === 'error') {
+    if (data.status === 'error' || (!data.data?.redirect && !data.data?.link)) {
       throw new Error(data.message || 'Failed to process payment');
     }
 
@@ -93,6 +102,18 @@ export async function initiatePayment(
   }
 }
 
+interface VerifyResponse {
+  status: string;
+  message: string;
+  data: {
+    id: number;
+    tx_ref: string;
+    status: string;
+    amount: number;
+    currency: string;
+  };
+}
+
 export async function verifyPayment(txRef: string) {
   try {
     console.log('Verifying payment for txRef:', txRef);
@@ -105,10 +126,10 @@ export async function verifyPayment(txRef: string) {
       }
     });
 
-    const data = await response.json();
+    const data = await response.json() as VerifyResponse;
     console.log('Verification response:', JSON.stringify(data, null, 2));
 
-    if (data.status === 'error') {
+    if (data.status === 'error' || !data.data) {
       throw new Error(data.message || 'Payment verification failed');
     }
 
