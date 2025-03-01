@@ -87,19 +87,34 @@ type AnalyticsData = {
   examCompletions: {
     date: string;
     count: number;
+    passCount: number;
+    failCount: number;
+    averageScore: number;
   }[];
   failedQuestions: {
     questionId: number;
     question: string;
     failureCount: number;
+    category: string;
   }[];
   userRegistrations: {
     date: string;
     count: number;
+    activeUsers: number;
   }[];
   examSuccessRate: {
     name: string;
     value: number;
+  }[];
+  topCategories: {
+    category: string;
+    successRate: number;
+    attempts: number;
+  }[];
+  revenueData: {
+    date: string;
+    amount: number;
+    packageType: string;
   }[];
 };
 
@@ -141,6 +156,10 @@ export default function AdminPage() {
   const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
   const [isDeactivateOpen, setIsDeactivateOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
+  const [dateRange, setDateRange] = useState<{start: Date; end: Date}>({
+    start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
+    end: new Date()
+  });
 
   if (!user) {
     return null;
@@ -161,7 +180,7 @@ export default function AdminPage() {
   });
 
   const { data: analyticsData } = useQuery<AnalyticsData>({
-    queryKey: ["/api/analytics"],
+    queryKey: ["/api/analytics", dateRange.start.toISOString(), dateRange.end.toISOString()],
     enabled: activeSection === "analytics",
   });
 
@@ -355,6 +374,32 @@ export default function AdminPage() {
     (userCurrentPage - 1) * ITEMS_PER_PAGE,
     userCurrentPage * ITEMS_PER_PAGE
   );
+
+  const exportAnalytics = () => {
+    if (!analyticsData) return;
+
+    const csvData = [
+      ["Date", "Exam Completions", "Pass Rate", "Average Score", "New Users", "Revenue"],
+      ...analyticsData.examCompletions.map(day => [
+        day.date,
+        day.count.toString(),
+        ((day.passCount / day.count) * 100).toFixed(2) + "%",
+        day.averageScore.toFixed(2),
+        analyticsData.userRegistrations.find(u => u.date === day.date)?.count || "0",
+        analyticsData.revenueData.find(r => r.date === day.date)?.amount.toString() || "0"
+      ])
+    ].map(row => row.join(",")).join("\n");
+
+    const blob = new Blob([csvData], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `analytics_${format(dateRange.start, 'yyyy-MM-dd')}_to_${format(dateRange.end, 'yyyy-MM-dd')}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <SidebarProvider>
@@ -812,10 +857,48 @@ export default function AdminPage() {
 
           {activeSection === "analytics" && (
             <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                  <Select
+                    value="30days"
+                    onValueChange={(value) => {
+                      const end = new Date();
+                      const start = new Date();
+                      switch (value) {
+                        case "7days":
+                          start.setDate(end.getDate() - 7);
+                          break;
+                        case "30days":
+                          start.setDate(end.getDate() - 30);
+                          break;
+                        case "90days":
+                          start.setDate(end.getDate() - 90);
+                          break;
+                      }
+                      setDateRange({ start, end });
+                    }}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select date range" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="7days">Last 7 days</SelectItem>
+                      <SelectItem value="30days">Last 30 days</SelectItem>
+                      <SelectItem value="90days">Last 90 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={exportAnalytics} variant="outline">
+                  <Download className="h-4 w-4 mr-2" />
+                  Export Report
+                </Button>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Exam Completions</CardTitle>
+                    <CardTitle>Exam Performance Trends</CardTitle>
+                    <CardDescription>Pass rates and average scores over time</CardDescription>
                   </CardHeader>
                   <CardContent className="h-[300px]">
                     <LineChart
@@ -826,14 +909,23 @@ export default function AdminPage() {
                     >
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="date" />
-                      <YAxis />
+                      <YAxis yAxisId="left" />
+                      <YAxis yAxisId="right" orientation="right" />
                       <Tooltip />
                       <Legend />
                       <Line
+                        yAxisId="left"
                         type="monotone"
-                        dataKey="count"
+                        dataKey="averageScore"
                         stroke="#8884d8"
-                        name="Completions"
+                        name="Average Score"
+                      />
+                      <Line
+                        yAxisId="right"
+                        type="monotone"
+                        dataKey={(data) => (data.passCount / data.count) * 100}
+                        stroke="#82ca9d"
+                        name="Pass Rate %"
                       />
                     </LineChart>
                   </CardContent>
@@ -841,28 +933,31 @@ export default function AdminPage() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Most Failed Questions</CardTitle>
+                    <CardTitle>Category Performance</CardTitle>
+                    <CardDescription>Success rates by exam category</CardDescription>
                   </CardHeader>
                   <CardContent className="h-[300px]">
                     <BarChart
                       width={500}
                       height={300}
-                      data={analyticsData?.failedQuestions}
+                      data={analyticsData?.topCategories}
                       margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="question" />
+                      <XAxis dataKey="category" />
                       <YAxis />
                       <Tooltip />
                       <Legend />
-                      <Bar dataKey="failureCount" fill="#82ca9d" name="Failures" />
+                      <Bar dataKey="successRate" fill="#82ca9d" name="Success Rate %" />
+                      <Bar dataKey="attempts" fill="#8884d8" name="Total Attempts" />
                     </BarChart>
                   </CardContent>
                 </Card>
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>User Registrations</CardTitle>
+                    <CardTitle>User Growth & Engagement</CardTitle>
+                    <CardDescription>New registrations and active users</CardDescription>
                   </CardHeader>
                   <CardContent className="h-[300px]">
                     <LineChart
@@ -880,7 +975,13 @@ export default function AdminPage() {
                         type="monotone"
                         dataKey="count"
                         stroke="#82ca9d"
-                        name="Registrations"
+                        name="New Users"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="activeUsers"
+                        stroke="#8884d8"
+                        name="Active Users"
                       />
                     </LineChart>
                   </CardContent>
@@ -888,31 +989,23 @@ export default function AdminPage() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Exam Success Rate</CardTitle>
+                    <CardTitle>Revenue Analysis</CardTitle>
+                    <CardDescription>Revenue trends by package type</CardDescription>
                   </CardHeader>
                   <CardContent className="h-[300px]">
-                    <PieChart width={500} height={300}>
-                      <Pie
-                        data={analyticsData?.examSuccessRate}
-                        cx={250}
-                        cy={150}
-                        innerRadius={60}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        paddingAngle={5}
-                        dataKey="value"
-                        label
-                      >
-                        {analyticsData?.examSuccessRate.map((entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={index === 0 ? "#82ca9d" : "#ff8042"}
-                          />
-                        ))}
-                      </Pie>
+                    <BarChart
+                      width={500}
+                      height={300}
+                      data={analyticsData?.revenueData}
+                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis />
                       <Tooltip />
                       <Legend />
-                    </PieChart>
+                      <Bar dataKey="amount" fill="#8884d8" name="Revenue (RWF)" />
+                    </BarChart>
                   </CardContent>
                 </Card>
               </div>
@@ -927,8 +1020,7 @@ export default function AdminPage() {
                 </CardHeader>
                 <CardContent>
                   <Table>
-                    <TableCaption>List of all payments</TableCaption>
-                    <TableHeader>
+                    <TableCaption>List of all payments</TableCaption>                    <TableHeader>
                       <TableRow>
                         <TableHead>ID</TableHead>
                         <TableHead>User</TableHead>
