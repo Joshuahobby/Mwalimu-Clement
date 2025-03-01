@@ -39,9 +39,9 @@ export default function HomePage() {
     try {
       setIsProcessing(true);
 
-      const response = await apiRequest("POST", "/api/payments", { 
+      const response = await apiRequest("POST", "/api/payments", {
         packageType,
-        paymentMethod 
+        paymentMethod
       });
 
       if (!response.ok) {
@@ -73,19 +73,22 @@ export default function HomePage() {
       id: 'mobilemoney' as const,
       name: 'Mobile Money',
       icon: Wallet,
-      description: 'Pay using MTN or Airtel Money'
+      description: 'Pay using MTN or Airtel Money',
+      color: 'green-500'
     },
     {
       id: 'card' as const,
       name: 'Card Payment',
       icon: CreditCard,
-      description: 'Pay with Visa or Mastercard'
+      description: 'Pay with Visa or Mastercard',
+      color: 'blue-500'
     },
     {
       id: 'banktransfer' as const,
       name: 'Bank Transfer',
       icon: Building,
-      description: 'Pay via bank transfer'
+      description: 'Pay via bank transfer',
+      color: 'purple-500'
     }
   ];
 
@@ -172,7 +175,7 @@ export default function HomePage() {
               <CardFooter>
                 <Dialog>
                   <DialogTrigger asChild>
-                    <Button 
+                    <Button
                       className="w-full"
                       onClick={() => setSelectedPackage(pkg.type)}
                       disabled={isProcessing}
@@ -180,22 +183,26 @@ export default function HomePage() {
                       {isProcessing ? "Processing..." : "Purchase"}
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                      <DialogTitle>Choose Payment Method</DialogTitle>
+                      <DialogTitle className="text-center text-xl font-bold">Choose Payment Method</DialogTitle>
                     </DialogHeader>
-                    <div className="grid gap-4">
+                    <div className="grid gap-4 py-4">
                       {paymentMethods.map((method) => (
                         <Button
                           key={method.id}
                           variant="outline"
-                          className="w-full flex items-center gap-2 justify-start p-4"
+                          className={`w-full flex items-center gap-3 justify-start p-4 transition-all duration-200 ease-in-out hover:scale-[1.02] hover:shadow-lg hover:border-2 hover:border-${method.color} group`}
                           onClick={() => handlePayment(pkg.type, method.id)}
                           disabled={isProcessing}
                         >
-                          <method.icon className="h-5 w-5" />
+                          <div className={`p-2 rounded-full bg-background group-hover:bg-${method.color}/10 transition-colors duration-200`}>
+                            <method.icon className={`h-6 w-6 ${method.color} group-hover:scale-110 transition-transform duration-200`} />
+                          </div>
                           <div className="text-left">
-                            <div className="font-semibold">{method.name}</div>
+                            <div className="font-semibold group-hover:text-primary transition-colors duration-200">
+                              {method.name}
+                            </div>
                             <div className="text-sm text-muted-foreground">
                               {method.description}
                             </div>
