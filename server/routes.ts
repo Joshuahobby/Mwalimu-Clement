@@ -284,21 +284,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         default: return res.status(400).json({ message: "Invalid package type" });
       }
 
-      // Create pending payment record with tx_ref in metadata
+      // Generate transaction reference
       const tx_ref = `DRV_${Date.now()}_${req.user.id}`;
-      const payment = await storage.createPayment({
-        userId: req.user.id,
-        amount,
-        packageType,
-        validUntil,
-        createdAt: new Date(),
-        status: "pending",
-        username: req.user.username,
-        metadata: {
-          tx_ref,
-          payment_method: paymentMethod
-        }
-      });
+
+      // Create pending payment record with tx_ref in metadata
+      const [payment] = await db
+        .insert(payments)
+        .values({
+          userId: req.user.id,
+          amount,
+          packageType,
+          validUntil,
+          createdAt: new Date(),
+          status: "pending",
+          username: req.user.username,
+          metadata: {
+            tx_ref,
+            payment_method: paymentMethod
+          }
+        })
+        .returning();
+
+      if (!payment) {
+        throw new Error("Failed to create payment record");
+      }
+
+      console.log('Created payment record:', payment);
 
       // Initiate Flutterwave payment
       const paymentResponse = await initiatePayment(
