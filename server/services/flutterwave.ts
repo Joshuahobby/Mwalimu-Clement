@@ -28,6 +28,8 @@ interface FlutterwaveResponse {
   status: string;
   message: string;
   data?: {
+    id: number;
+    tx_ref: string;
     redirect?: string;
     link?: string;
   };
@@ -66,7 +68,7 @@ export async function initiatePayment(
   };
 
   // Add payment method specific configurations
-  const endpoint = paymentMethod === 'mobilemoney' 
+  const endpoint = paymentMethod === 'mobilemoney'
     ? `${FLUTTERWAVE_API_URL}/charges?type=mobile_money_rwanda`
     : `${FLUTTERWAVE_API_URL}/payments`;
 
@@ -84,7 +86,8 @@ export async function initiatePayment(
       headers: {
         'Authorization': `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache'
       },
       body: JSON.stringify(payload)
     });
@@ -92,11 +95,29 @@ export async function initiatePayment(
     const data = await response.json() as FlutterwaveResponse;
     console.log('Flutterwave response:', JSON.stringify(data, null, 2));
 
+    // For mobile money, handle the "Charge initiated" status as success
+    if (data.status === 'success' && data.message === 'Charge initiated') {
+      // Extract the redirect URL from the response
+      const redirectLink = data.meta?.authorization?.redirect;
+
+      if (!redirectLink) {
+        throw new Error('No redirect URL found in response');
+      }
+
+      return {
+        status: 'success',
+        data: {
+          link: redirectLink,
+          tx_ref: tx_ref
+        }
+      };
+    }
+
     if (data.status === 'error') {
       throw new Error(data.message || 'Failed to process payment');
     }
 
-    // Handle both direct link and authorization redirect responses
+    // For other payment methods or responses
     const redirectLink = data.data?.link || data.data?.redirect || data.meta?.authorization?.redirect;
 
     if (!redirectLink) {
@@ -112,7 +133,7 @@ export async function initiatePayment(
     };
   } catch (error) {
     console.error('Flutterwave payment initiation error:', error);
-    throw new Error('Failed to initiate payment');
+    throw error;
   }
 }
 
@@ -132,11 +153,12 @@ export async function verifyPayment(txRef: string) {
   try {
     console.log('Verifying payment for txRef:', txRef);
 
-    const response = await fetch(`${FLUTTERWAVE_API_URL}/transactions/${txRef}/verify`, {
+    const response = await fetch(`${FLUTTERWAVE_API_URL}/transactions/verify/${txRef}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache'
       }
     });
 
@@ -150,6 +172,6 @@ export async function verifyPayment(txRef: string) {
     return data.data;
   } catch (error) {
     console.error('Flutterwave payment verification error:', error);
-    throw new Error('Failed to verify payment');
+    throw error;
   }
 }

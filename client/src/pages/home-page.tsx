@@ -42,9 +42,9 @@ export default function HomePage() {
       // Show info toast about OTP for mobile money
       if (paymentMethod === 'mobilemoney') {
         toast({
-          title: "Mobile Money Payment",
-          description: "You'll receive an OTP via SMS and WhatsApp to verify your payment.",
-          duration: 5000,
+          title: "Mobile Money Payment (Test Mode)",
+          description: "You will be redirected to the test payment page. In test mode, you won't receive an actual OTP but you can proceed with the verification.",
+          duration: 7000,
         });
       }
 
@@ -82,7 +82,7 @@ export default function HomePage() {
       id: 'mobilemoney' as const,
       name: 'Mobile Money',
       icon: Wallet,
-      description: 'Pay using MTN or Airtel Money (Requires OTP verification)',
+      description: 'Pay using MTN or Airtel Money (Test Mode)',
       color: 'green-500'
     },
     {
