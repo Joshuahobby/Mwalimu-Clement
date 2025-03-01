@@ -25,10 +25,10 @@ export async function initiatePayment(
     redirect_url: redirectUrl,
     payment_type: 'mobilemoneyrw',
     order_id: tx_ref,
-    email: user.email || `${user.username}@example.com`,
-    phone_number: user.phoneNumber || '25078123456', // Default test phone number for Rwanda
+    email: user.email || 'customer@example.com', // Valid email format for test mode
+    phone_number: '250784123456', // Test phone number for Rwanda
     fullname: user.displayName || user.username,
-    client_ip: '154.123.220.1', // Test IP
+    client_ip: '154.123.220.1',
     device_fingerprint: `device_${Date.now()}`,
     meta: {
       user_id: user.id,
