@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
-import { Clock, CalendarDays, CreditCard, BookOpen } from "lucide-react";
+import { Clock, CalendarDays, CreditCard, BookOpen, Wallet, Building } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useState } from "react";
 
 interface PaymentResponse {
   status: string;
@@ -17,19 +19,26 @@ interface PaymentResponse {
   };
 }
 
+type PaymentMethod = 'card' | 'mobilemoney' | 'banktransfer';
+
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const [selectedPackage, setSelectedPackage] = useState<keyof typeof packagePrices | null>(null);
 
   const { data: activePayment, isLoading: paymentLoading } = useQuery<Payment>({
     queryKey: ["/api/payments/active"],
     retry: false,
   });
 
-  const handlePayment = async (packageType: keyof typeof packagePrices) => {
+  const handlePayment = async (packageType: keyof typeof packagePrices, paymentMethod: PaymentMethod) => {
     try {
-      const response = await apiRequest("POST", "/api/payments", { packageType });
+      const response = await apiRequest("POST", "/api/payments", { 
+        packageType,
+        paymentMethod 
+      });
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || "Failed to initiate payment");
@@ -50,6 +59,27 @@ export default function HomePage() {
       });
     }
   };
+
+  const paymentMethods = [
+    {
+      id: 'mobilemoney' as const,
+      name: 'Mobile Money',
+      icon: Wallet,
+      description: 'Pay using MTN or Airtel Money'
+    },
+    {
+      id: 'card' as const,
+      name: 'Card Payment',
+      icon: CreditCard,
+      description: 'Pay with Visa or Mastercard'
+    },
+    {
+      id: 'banktransfer' as const,
+      name: 'Bank Transfer',
+      icon: Building,
+      description: 'Pay via bank transfer'
+    }
+  ];
 
   const packages = [
     {
@@ -150,12 +180,39 @@ export default function HomePage() {
                 <p className="text-3xl font-bold">{pkg.price} RWF</p>
               </CardContent>
               <CardFooter>
-                <Button
-                  className="w-full"
-                  onClick={() => handlePayment(pkg.type)}
-                >
-                  Purchase
-                </Button>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button 
+                      className="w-full"
+                      onClick={() => setSelectedPackage(pkg.type)}
+                    >
+                      Purchase
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Choose Payment Method</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4">
+                      {paymentMethods.map((method) => (
+                        <Button
+                          key={method.id}
+                          variant="outline"
+                          className="w-full flex items-center gap-2 justify-start p-4"
+                          onClick={() => handlePayment(pkg.type, method.id)}
+                        >
+                          <method.icon className="h-5 w-5" />
+                          <div className="text-left">
+                            <div className="font-semibold">{method.name}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {method.description}
+                            </div>
+                          </div>
+                        </Button>
+                      ))}
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </CardFooter>
             </Card>
           ))}

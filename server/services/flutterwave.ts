@@ -7,15 +7,33 @@ if (!process.env.FLUTTERWAVE_SECRET_KEY || !process.env.FLUTTERWAVE_PUBLIC_KEY) 
 
 const FLUTTERWAVE_API_URL = 'https://api.flutterwave.com/v3';
 
+interface PaymentPayload {
+  tx_ref: string;
+  amount: number;
+  currency: string;
+  redirect_url: string;
+  email: string;
+  phone_number: string;
+  fullname: string;
+  payment_type?: string;
+  client_ip: string;
+  device_fingerprint: string;
+  meta: {
+    user_id: number;
+    package_type: string;
+  };
+}
+
 export async function initiatePayment(
   amount: number,
   user: User,
   packageType: string,
-  redirectUrl: string
+  redirectUrl: string,
+  paymentMethod: 'card' | 'mobilemoney' | 'banktransfer' = 'mobilemoney'
 ) {
   const tx_ref = `DRV_${Date.now()}_${user.id}`;
 
-  const payload = {
+  const payload: PaymentPayload = {
     tx_ref,
     amount,
     currency: 'RWF',
@@ -31,10 +49,21 @@ export async function initiatePayment(
     }
   };
 
+  // Add payment method specific configurations
+  const endpoint = paymentMethod === 'mobilemoney' 
+    ? `${FLUTTERWAVE_API_URL}/charges?type=mobile_money_rwanda`
+    : `${FLUTTERWAVE_API_URL}/payments`;
+
+  if (paymentMethod === 'card') {
+    payload.payment_type = 'card';
+  } else if (paymentMethod === 'banktransfer') {
+    payload.payment_type = 'banktransfer';
+  }
+
   try {
     console.log('Initiating Rwanda Mobile Money payment with payload:', JSON.stringify(payload, null, 2));
 
-    const response = await fetch(`${FLUTTERWAVE_API_URL}/charges?type=mobile_money_rwanda`, {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
@@ -54,7 +83,7 @@ export async function initiatePayment(
     return {
       status: 'success',
       data: {
-        link: data.meta.authorization.redirect,
+        link: data.data.redirect || data.data.link,
         tx_ref: tx_ref
       }
     };
