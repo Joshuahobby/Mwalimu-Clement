@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Question, insertQuestionSchema, User, Payment } from "@shared/schema";
+import { Question, insertQuestionSchema, User, Payment, packagePrices } from "@shared/schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
@@ -35,7 +35,8 @@ import {
   Download,
   Upload,
 } from "lucide-react";
-import {  Select,
+import {
+  Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
@@ -80,6 +81,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
+import { Switch } from "@/components/ui/switch";
 
 type AnalyticsData = {
   examCompletions: {
@@ -109,6 +111,12 @@ type UserStats = {
 
 type AdminSection = "users" | "questions" | "pricing" | "payments" | "analytics" | "settings";
 type PaymentStatus = "pending" | "completed" | "failed" | "refunded";
+type PricingPackage = {
+  type: keyof typeof packagePrices;
+  name: string;
+  price: number;
+  isEnabled: boolean;
+};
 
 const ITEMS_PER_PAGE = 10;
 
@@ -117,7 +125,6 @@ export default function AdminPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
-  // Move this useEffect to the top level
   useEffect(() => {
     if (!user?.isAdmin) {
       setLocation("/");
@@ -135,12 +142,10 @@ export default function AdminPage() {
   const [isDeactivateOpen, setIsDeactivateOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
 
-  // Early return if no user or not admin, but after hooks
   if (!user) {
     return null;
   }
 
-  // Queries
   const { data: questions } = useQuery<Question[]>({
     queryKey: ["/api/questions"],
   });
@@ -165,10 +170,8 @@ export default function AdminPage() {
     enabled: activeSection === "users",
   });
 
-  // Extract unique categories from questions
   const categories = [...new Set(questions?.map(q => q.category) || [])];
 
-  // Filter and paginate questions
   const filteredQuestions = questions?.filter(question => {
     const matchesSearch = question.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          question.category.toLowerCase().includes(searchTerm.toLowerCase());
@@ -182,7 +185,6 @@ export default function AdminPage() {
     currentPage * ITEMS_PER_PAGE
   );
 
-  // Question management form and mutations
   const form = useForm({
     resolver: zodResolver(insertQuestionSchema),
     defaultValues: {
@@ -275,6 +277,28 @@ export default function AdminPage() {
     },
   });
 
+  const updatePricingMutation = useMutation({
+    mutationFn: async (data: { type: string; price: number; isEnabled: boolean }) => {
+      const res = await apiRequest("PATCH", "/api/pricing", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pricing"] });
+      toast({
+        title: "Success",
+        description: "Pricing updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+
   const handleExport = () => {
     const questionsJson = JSON.stringify(questions, null, 2);
     const blob = new Blob([questionsJson], { type: 'application/json' });
@@ -295,7 +319,6 @@ export default function AdminPage() {
       reader.onload = async (e) => {
         try {
           const questions = JSON.parse(e.target?.result as string);
-          // TODO: Implement bulk import API endpoint
           await apiRequest("POST", "/api/questions/bulk", questions);
           queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
           toast({
@@ -314,7 +337,6 @@ export default function AdminPage() {
     }
   };
 
-  // Filter and paginate users
   const filteredUsers = users?.filter(user =>
     user.username.toLowerCase().includes(userSearchTerm.toLowerCase())
   ) || [];
@@ -570,7 +592,6 @@ export default function AdminPage() {
                 ))}
               </div>
 
-              {/* Pagination */}
               {totalPages > 1 && (
                 <div className="flex justify-center gap-2 mt-4">
                   <Button
@@ -670,7 +691,6 @@ export default function AdminPage() {
                     ))}
                   </div>
 
-                  {/* Pagination */}
                   {totalUserPages > 1 && (
                     <div className="flex justify-center gap-2 mt-4">
                       <Button
@@ -705,7 +725,6 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* Reset Password Dialog */}
           <Dialog open={isResetPasswordOpen} onOpenChange={setIsResetPasswordOpen}>
             <DialogContent>
               <DialogHeader>
@@ -749,7 +768,6 @@ export default function AdminPage() {
             </DialogContent>
           </Dialog>
 
-          {/* Deactivate User Dialog */}
           <Dialog open={isDeactivateOpen} onOpenChange={setIsDeactivateOpen}>
             <DialogContent>
               <DialogHeader>
@@ -981,7 +999,113 @@ export default function AdminPage() {
             </div>
           )}
 
-          {(activeSection === "pricing" || activeSection === "settings") && (
+          {activeSection === "pricing" && (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Package Pricing Management</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableCaption>Manage pricing for different packages</TableCaption>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Package</TableHead>
+                        <TableHead>Current Price (RWF)</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {[
+                        { type: "single", name: "Single Exam" },
+                        { type: "daily", name: "Daily Access" },
+                        { type: "weekly", name: "Weekly Access" },
+                        { type: "monthly", name: "Monthly Access" },
+                      ].map((pkg) => (
+                        <TableRow key={pkg.type}>
+                          <TableCell className="font-medium">{pkg.name}</TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              defaultValue={packagePrices[pkg.type as keyof typeof packagePrices]}
+                              onChange={(e) => {
+                                const price = parseInt(e.target.value);
+                                if (!isNaN(price) && price >= 0) {
+                                  updatePricingMutation.mutate({
+                                    type: pkg.type,
+                                    price,
+                                    isEnabled: true,
+                                  });
+                                }
+                              }}
+                              className="w-32"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Switch
+                              defaultChecked={true}
+                              onCheckedChange={(isEnabled) => {
+                                updatePricingMutation.mutate({
+                                  type: pkg.type,
+                                  price: packagePrices[pkg.type as keyof typeof packagePrices],
+                                  isEnabled,
+                                });
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                updatePricingMutation.mutate({
+                                  type: pkg.type,
+                                  price: packagePrices[pkg.type as keyof typeof packagePrices],
+                                  isEnabled: true,
+                                });
+                              }}
+                            >
+                              Reset to Default
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Pricing History</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableCaption>Recent price changes</TableCaption>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Package</TableHead>
+                        <TableHead>Old Price</TableHead>
+                        <TableHead>New Price</TableHead>
+                        <TableHead>Changed By</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground">
+                          No recent changes
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {(activeSection === "settings") && (
             <Card>
               <CardHeader>
                 <CardTitle>{activeSection.charAt(0).toUpperCase() + activeSection.slice(1)}</CardTitle>
