@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Question, insertQuestionSchema, User, Payment, packagePrices } from "@shared/schema";
+import { Question, insertQuestionSchema, User, Payment, packagePrices, insertUserSchema, InsertUser } from "@shared/schema"; // Added import
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
@@ -83,6 +83,8 @@ import {
 import { format } from "date-fns";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2 } from 'lucide-react'; // Added import
+
 
 type AnalyticsData = {
   examCompletions: {
@@ -141,6 +143,39 @@ export default function AdminPage() {
   const { user, logoutMutation } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false); // Added state
+  const addUserForm = useForm({
+    resolver: zodResolver(insertUserSchema),
+    defaultValues: {
+      username: "",
+      password: "",
+    },
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: async (data: InsertUser) => {
+      const res = await apiRequest("POST", "/api/users", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setIsAddUserOpen(false);
+      addUserForm.reset();
+      toast({
+        title: "Success",
+        description: "User created successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
 
   useEffect(() => {
     if (!user?.isAdmin) {
@@ -762,7 +797,7 @@ export default function AdminPage() {
 
           {activeSection === "users" && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex justify-between items-center">
                 <div className="flex items-center gap-4 flex-1">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -801,6 +836,9 @@ export default function AdminPage() {
                     </DropdownMenu>
                   )}
                 </div>
+                <Button onClick={() => setIsAddUserOpen(true)}>
+                  Add New User
+                </Button>
               </div>
 
               <Card>
@@ -1080,6 +1118,56 @@ export default function AdminPage() {
                   Deactivate
                 </Button>
               </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Add User Dialog */}
+          <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New User</DialogTitle>
+                <DialogDescription>
+                  Create a new user account. The user can change their password after first login.
+                </DialogDescription>
+              </DialogHeader>
+              <Form {...addUserForm}>
+                <form onSubmit={addUserForm.handleSubmit((data) => createUserMutation.mutate(data))} className="space-y-4">
+                  <FormField
+                    control={addUserForm.control}
+                    name="username"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Username</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={addUserForm.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Password</FormLabel>
+                        <FormControl>
+                          <Input type="password" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <DialogFooter>
+                    <Button type="submit" disabled={createUserMutation.isPending}>
+                      {createUserMutation.isPending && (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      )}
+                      Create User
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
             </DialogContent>
           </Dialog>
 
