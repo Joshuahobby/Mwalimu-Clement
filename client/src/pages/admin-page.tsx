@@ -449,6 +449,40 @@ export default function AdminPage() {
     },
   });
 
+  const { data: sessions } = useQuery<{
+    userId: number;
+    username: string;
+    lastActivity: string;
+    ipAddress: string;
+    device: string;
+    isActive: boolean;
+  }[]>({
+    queryKey: ["/api/sessions"],
+    enabled: activeSection === "users",
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  const terminateSessionMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      const res = await apiRequest("POST", `/api/sessions/${userId}/terminate`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sessions"] });
+      toast({
+        title: "Success",
+        description: "Session terminated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen">
@@ -919,6 +953,58 @@ export default function AdminPage() {
                   </div>
                 </CardContent>
               </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Active Sessions</CardTitle>
+                  <CardDescription>Monitor and manage user sessions</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Username</TableHead>
+                        <TableHead>Last Activity</TableHead>
+                        <TableHead>IP Address</TableHead>
+                        <TableHead>Device</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sessions?.map((session) => (
+                        <TableRow key={session.userId}>
+                          <TableCell>{session.username}</TableCell>
+                          <TableCell>{format(new Date(session.lastActivity), 'PPp')}</TableCell>
+                          <TableCell>{session.ipAddress}</TableCell>
+                          <TableCell>{session.device}</TableCell>
+                          <TableCell>
+                            <Badge variant={session.isActive ? "default" : "secondary"}>
+                              {session.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => terminateSessionMutation.mutate(session.userId)}
+                              disabled={terminateSessionMutation.isPending}
+                            >
+                              Terminate Session
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {!sessions?.length && (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center text-muted-foreground">
+                            No active sessions
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
             </div>
           )}
 
@@ -934,8 +1020,7 @@ export default function AdminPage() {
                 <Input
                   type="password"
                   placeholder="New password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  value={newPassword}                  onChange={(e) => setNewPassword(e.target.value)}
                 />
               </div>
               <DialogFooter>
