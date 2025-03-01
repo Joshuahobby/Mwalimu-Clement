@@ -408,7 +408,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           console.log('Payment completed successfully:', payment);
-          return res.redirect('/?payment=success');
+          return res.redirect('/exam'); // Redirect to exam dashboard after successful payment
         } else {
           console.error('Payment verification failed. Status:', transaction.status);
           return res.redirect('/?payment=failed');

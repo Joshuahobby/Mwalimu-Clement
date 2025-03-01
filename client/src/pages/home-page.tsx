@@ -24,7 +24,7 @@ type PaymentMethod = 'card' | 'mobilemoney' | 'banktransfer';
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
   const { toast } = useToast();
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [selectedPackage, setSelectedPackage] = useState<keyof typeof packagePrices | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -40,6 +40,9 @@ export default function HomePage() {
         description: "Your payment has been processed successfully.",
         variant: "default",
       });
+
+      // Invalidate the active payment query to refresh the data
+      queryClient.invalidateQueries({ queryKey: ["/api/payments/active"] });
     } else if (paymentStatus === 'failed') {
       toast({
         title: "Payment Failed",
