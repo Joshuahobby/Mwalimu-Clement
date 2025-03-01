@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { insertQuestionSchema, packagePrices, examSimulations, examSimulationLogs, insertCustomPackageSchema, customPackages, payments } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
-import { queryClient } from './queryClient'; // Assuming queryClient is imported from somewhere
+import { queryClient } from './queryClient';
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -291,37 +291,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let validUntil = new Date();
       let packageType = req.body.packageType;
 
-      if (req.body.customPackageId) {
-        // Handle custom package
-        const [customPackage] = await db
-          .select()
-          .from(customPackages)
-          .where(
-            and(
-              eq(customPackages.id, req.body.customPackageId),
-              eq(customPackages.isActive, true)
-            )
-          );
+      // Handle default package
+      amount = packagePrices[packageType as keyof typeof packagePrices];
+      if (!amount) return res.status(400).json({ message: "Invalid package type" });
 
-        if (!customPackage) {
-          return res.status(400).json({ message: "Invalid or inactive package" });
-        }
-
-        amount = customPackage.price;
-        validUntil.setHours(validUntil.getHours() + customPackage.duration);
-        packageType = customPackage.name;
-      } else {
-        // Handle default package
-        amount = packagePrices[packageType as keyof typeof packagePrices];
-        if (!amount) return res.status(400).json({ message: "Invalid package type" });
-
-        switch (packageType) {
-          case "single": validUntil.setHours(validUntil.getHours() + 1); break;
-          case "daily": validUntil.setDate(validUntil.getDate() + 1); break;
-          case "weekly": validUntil.setDate(validUntil.getDate() + 7); break;
-          case "monthly": validUntil.setMonth(validUntil.getMonth() + 1); break;
-          default: return res.status(400).json({ message: "Invalid package type" });
-        }
+      switch (packageType) {
+        case "single": validUntil.setHours(validUntil.getHours() + 1); break;
+        case "daily": validUntil.setDate(validUntil.getDate() + 1); break;
+        case "weekly": validUntil.setDate(validUntil.getDate() + 7); break;
+        case "monthly": validUntil.setMonth(validUntil.getMonth() + 1); break;
+        default: return res.status(400).json({ message: "Invalid package type" });
       }
 
       const [payment] = await db
@@ -330,7 +309,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId: req.user.id,
           amount,
           packageType,
-          customPackageId: req.body.customPackageId || null,
           validUntil,
           createdAt: new Date(),
           status: "completed",
@@ -355,7 +333,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add this route after the existing /api/payments route
   app.get("/api/payments/active", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
