@@ -25,16 +25,11 @@ export async function initiatePayment(
     redirect_url: redirectUrl,
     payment_type: 'mobilemoneyrw',
     order_id: tx_ref,
-    customer: {
-      email: user.email || `${user.username}@example.com`,
-      phone_number: user.phoneNumber || '25078123456', // Default test phone number for Rwanda
-      name: user.displayName || user.username,
-    },
-    customizations: {
-      title: 'Driving Theory Exam',
-      description: `Payment for ${packageType} package`,
-      logo: 'https://your-logo-url.com/logo.png'
-    },
+    email: user.email || `${user.username}@example.com`,
+    phone_number: user.phoneNumber || '25078123456', // Default test phone number for Rwanda
+    fullname: user.displayName || user.username,
+    client_ip: '154.123.220.1', // Test IP
+    device_fingerprint: `device_${Date.now()}`,
     meta: {
       user_id: user.id,
       package_type: packageType
@@ -47,7 +42,7 @@ export async function initiatePayment(
     console.log('Flutterwave response:', JSON.stringify(response, null, 2));
 
     if (response.status === 'error') {
-      throw new Error(response.message || 'Payment initiation failed');
+      throw new Error(response.message || 'Failed to initiate payment');
     }
 
     return {
