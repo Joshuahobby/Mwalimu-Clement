@@ -23,10 +23,11 @@ export async function initiatePayment(
     amount,
     currency: 'RWF',
     redirect_url: redirectUrl,
-    payment_options: 'mobilemoneyrwanda',
+    payment_type: 'mobilemoneyrw',
+    order_id: tx_ref,
     customer: {
       email: user.email || `${user.username}@example.com`,
-      phonenumber: user.phoneNumber || '25078123456', // Default test phone number for Rwanda
+      phone_number: user.phoneNumber || '25078123456', // Default test phone number for Rwanda
       name: user.displayName || user.username,
     },
     customizations: {
@@ -41,8 +42,8 @@ export async function initiatePayment(
   };
 
   try {
-    console.log('Initiating Flutterwave payment with payload:', JSON.stringify(payload, null, 2));
-    const response = await flw.Charge.card(payload);
+    console.log('Initiating Rwanda Mobile Money payment with payload:', JSON.stringify(payload, null, 2));
+    const response = await flw.MobileMoney.rwanda(payload);
     console.log('Flutterwave response:', JSON.stringify(response, null, 2));
 
     if (response.status === 'error') {
@@ -52,7 +53,7 @@ export async function initiatePayment(
     return {
       status: 'success',
       data: {
-        link: response.data.link,
+        link: response.data.redirect,
         tx_ref: tx_ref
       }
     };
