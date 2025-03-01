@@ -15,7 +15,6 @@ interface PaymentPayload {
   email: string;
   phone_number: string;
   fullname: string;
-  payment_type?: string;
   client_ip: string;
   device_fingerprint: string;
   meta: {
@@ -67,21 +66,10 @@ export async function initiatePayment(
     }
   };
 
-  // Add payment method specific configurations
-  const endpoint = paymentMethod === 'mobilemoney'
-    ? `${FLUTTERWAVE_API_URL}/charges?type=mobile_money_rwanda`
-    : `${FLUTTERWAVE_API_URL}/payments`;
-
-  if (paymentMethod === 'card') {
-    payload.payment_type = 'card';
-  } else if (paymentMethod === 'banktransfer') {
-    payload.payment_type = 'banktransfer';
-  }
-
   try {
     console.log('Initiating payment with payload:', JSON.stringify(payload, null, 2));
 
-    const response = await fetch(endpoint, {
+    const response = await fetch(`${FLUTTERWAVE_API_URL}/payments`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
@@ -153,7 +141,7 @@ export async function verifyPayment(txRef: string) {
   try {
     console.log('Verifying payment for txRef:', txRef);
 
-    const response = await fetch(`${FLUTTERWAVE_API_URL}/transactions/verify/${txRef}`, {
+    const response = await fetch(`${FLUTTERWAVE_API_URL}/transactions/verify_by_reference?tx_ref=${txRef}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,

@@ -43,7 +43,7 @@ export default function HomePage() {
       if (paymentMethod === 'mobilemoney') {
         toast({
           title: "Mobile Money Payment (Test Mode)",
-          description: "You will be redirected to the test payment page. Since this is test mode, no actual OTP will be sent - you can simply proceed with the verification to complete the test payment.",
+          description: "Since this is test mode, proceed to enter any number as OTP in the next screen. This simulates the mobile money payment flow in a test environment.",
           duration: 10000,
         });
       }
@@ -82,7 +82,7 @@ export default function HomePage() {
       id: 'mobilemoney' as const,
       name: 'Mobile Money',
       icon: Wallet,
-      description: 'Pay using MTN or Airtel Money (Test Mode - No real OTP needed)',
+      description: 'Pay using MTN or Airtel Money (Test Mode - Enter any number as OTP)',
       color: 'green-500'
     },
     {
