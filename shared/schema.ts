@@ -76,15 +76,26 @@ export const payments = pgTable("payments", {
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   amount: integer("amount").notNull(),
   packageType: text("package_type").notNull(),
+  customPackageId: integer("custom_package_id").references(() => customPackages.id),
   validUntil: timestamp("valid_until").notNull(),
   createdAt: timestamp("created_at").notNull(),
   status: text("status", { enum: paymentStatuses }).default("pending").notNull(),
-  username: text("username"),
+  transactionId: text("transaction_id"),
+  paymentMethod: text("payment_method"),
+  metadata: json("metadata").$type<{
+    customerName?: string;
+    email?: string;
+    phone?: string;
+    notes?: string;
+  }>(),
+  refundReason: text("refund_reason"),
+  refundedAt: timestamp("refunded_at"),
 }, (table) => {
   return {
     userIdIdx: index("payment_user_id_idx").on(table.userId),
     statusIdx: index("payment_status_idx").on(table.status),
     createdAtIdx: index("payment_created_at_idx").on(table.createdAt),
+    validUntilIdx: index("payment_valid_until_idx").on(table.validUntil),
   };
 });
 
@@ -157,15 +168,37 @@ export const updateProfileSchema = createInsertSchema(users).pick({
 
 export const insertQuestionSchema = createInsertSchema(questions);
 export const insertExamSchema = createInsertSchema(exams);
-export const insertPaymentSchema = createInsertSchema(payments);
 
-export type User = typeof users.$inferSelect;
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type UpdateProfile = z.infer<typeof updateProfileSchema>;
-export type Question = typeof questions.$inferSelect;
-export type Exam = typeof exams.$inferSelect;
-export type Payment = typeof payments.$inferSelect;
-export type Settings = typeof settings.$inferSelect;
+
+// New table for custom packages managed by admin
+export const customPackages = pgTable("custom_packages", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  price: integer("price").notNull(),
+  duration: integer("duration").notNull(), // in hours
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => {
+  return {
+    nameIdx: index("custom_package_name_idx").on(table.name),
+    activeIdx: index("custom_package_active_idx").on(table.isActive),
+  };
+});
+
+
+export const insertCustomPackageSchema = createInsertSchema(customPackages).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPaymentSchema = createInsertSchema(payments).omit({
+  id: true,
+  createdAt: true,
+  refundedAt: true,
+});
 
 export const packagePrices = {
   single: 200,
@@ -176,8 +209,16 @@ export const packagePrices = {
 
 export type PackageType = keyof typeof packagePrices;
 
+export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type UpdateProfile = z.infer<typeof updateProfileSchema>;
+export type Question = typeof questions.$inferSelect;
+export type Exam = typeof exams.$inferSelect;
+export type Payment = typeof payments.$inferSelect;
+export type Settings = typeof settings.$inferSelect;
 
 // Create insert schemas
+
 export const insertExamSimulationSchema = createInsertSchema(examSimulations).omit({
   id: true,
   isCompleted: true,
@@ -195,3 +236,6 @@ export type ExamSimulation = typeof examSimulations.$inferSelect;
 export type InsertExamSimulation = z.infer<typeof insertExamSimulationSchema>;
 export type ExamSimulationLog = typeof examSimulationLogs.$inferSelect;
 export type InsertExamSimulationLog = z.infer<typeof insertExamSimulationLogSchema>;
+export type CustomPackage = typeof customPackages.$inferSelect;
+export type InsertCustomPackage = z.infer<typeof insertCustomPackageSchema>;
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;

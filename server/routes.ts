@@ -2,9 +2,9 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertQuestionSchema, packagePrices, examSimulations, examSimulationLogs } from "@shared/schema";
+import { insertQuestionSchema, packagePrices, examSimulations, examSimulationLogs, insertCustomPackageSchema, customPackages, payments } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -213,34 +213,208 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(updatedExam);
   });
 
-  // Payments
+  // Admin Package Management Routes
+  app.get("/api/admin/packages", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user.isAdmin) return res.sendStatus(403);
+
+    const packages = await db
+      .select()
+      .from(customPackages)
+      .orderBy(desc(customPackages.createdAt));
+
+    res.json(packages);
+  });
+
+  app.post("/api/admin/packages", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user.isAdmin) return res.sendStatus(403);
+
+    const validation = insertCustomPackageSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ errors: validation.error.errors });
+    }
+
+    const [newPackage] = await db
+      .insert(customPackages)
+      .values(validation.data)
+      .returning();
+
+    res.status(201).json(newPackage);
+  });
+
+  app.patch("/api/admin/packages/:id", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user.isAdmin) return res.sendStatus(403);
+
+    const packageId = parseInt(req.params.id);
+    const [updatedPackage] = await db
+      .update(customPackages)
+      .set({ ...req.body, updatedAt: new Date() })
+      .where(eq(customPackages.id, packageId))
+      .returning();
+
+    if (!updatedPackage) {
+      return res.status(404).json({ message: "Package not found" });
+    }
+
+    res.json(updatedPackage);
+  });
+
+  // Enhanced Payment Routes
+  app.get("/api/packages", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    // Get both default and custom packages
+    const customPkgs = await db
+      .select()
+      .from(customPackages)
+      .where(eq(customPackages.isActive, true));
+
+    const defaultPkgs = Object.entries(packagePrices).map(([type, price]) => ({
+      id: null,
+      name: type.charAt(0).toUpperCase() + type.slice(1),
+      description: `${type} access to exams`,
+      price,
+      duration: type === 'single' ? 1 :
+                type === 'daily' ? 24 :
+                type === 'weekly' ? 168 : 720,
+      isDefault: true
+    }));
+
+    res.json([...defaultPkgs, ...customPkgs]);
+  });
+
   app.post("/api/payments", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
-    const { packageType } = req.body;
-    const amount = packagePrices[packageType as keyof typeof packagePrices];
-    if (!amount) return res.status(400).send("Invalid package type");
+    let amount: number;
+    let validUntil = new Date();
 
-    const validUntil = new Date();
-    switch (packageType) {
-      case "single": validUntil.setHours(validUntil.getHours() + 1); break;
-      case "daily": validUntil.setDate(validUntil.getDate() + 1); break;
-      case "weekly": validUntil.setDate(validUntil.getDate() + 7); break;
-      case "monthly": validUntil.setMonth(validUntil.getMonth() + 1); break;
+    if (req.body.customPackageId) {
+      // Handle custom package
+      const [customPackage] = await db
+        .select()
+        .from(customPackages)
+        .where(
+          and(
+            eq(customPackages.id, req.body.customPackageId),
+            eq(customPackages.isActive, true)
+          )
+        );
+
+      if (!customPackage) {
+        return res.status(400).json({ message: "Invalid or inactive package" });
+      }
+
+      amount = customPackage.price;
+      validUntil.setHours(validUntil.getHours() + customPackage.duration);
+    } else {
+      // Handle default package
+      const { packageType } = req.body;
+      amount = packagePrices[packageType as keyof typeof packagePrices];
+      if (!amount) return res.status(400).json({ message: "Invalid package type" });
+
+      switch (packageType) {
+        case "single": validUntil.setHours(validUntil.getHours() + 1); break;
+        case "daily": validUntil.setDate(validUntil.getDate() + 1); break;
+        case "weekly": validUntil.setDate(validUntil.getDate() + 7); break;
+        case "monthly": validUntil.setMonth(validUntil.getMonth() + 1); break;
+      }
     }
 
-    const payment = await storage.createPayment({
-      userId: req.user.id,
-      amount,
-      packageType,
-      validUntil,
-      createdAt: new Date(),
-      status: "completed",
-      username: req.user.username,
-    });
+    const [payment] = await db
+      .insert(payments)
+      .values({
+        userId: req.user.id,
+        amount,
+        packageType: req.body.packageType,
+        customPackageId: req.body.customPackageId,
+        validUntil,
+        createdAt: new Date(),
+        status: "completed",
+        metadata: {
+          customerName: req.user.displayName || req.user.username,
+          email: req.user.email,
+          phone: req.user.phoneNumber,
+        },
+      })
+      .returning();
 
     res.json(payment);
   });
+
+  // Payment Analytics for Admin
+  app.get("/api/admin/analytics/payments", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user.isAdmin) return res.sendStatus(403);
+
+    const timeframe = req.query.timeframe || 'month';
+    let startDate = new Date();
+
+    switch(timeframe) {
+      case 'week':
+        startDate.setDate(startDate.getDate() - 7);
+        break;
+      case 'month':
+        startDate.setMonth(startDate.getMonth() - 1);
+        break;
+      case 'year':
+        startDate.setFullYear(startDate.getFullYear() - 1);
+        break;
+    }
+
+    const [result] = await db
+      .select({
+        totalRevenue: sql`sum(amount)::integer`,
+        totalPayments: sql`count(*)::integer`,
+        completedPayments: sql`count(*) filter (where status = 'completed')::integer`,
+        refundedPayments: sql`count(*) filter (where status = 'refunded')::integer`,
+      })
+      .from(payments)
+      .where(sql`created_at >= ${startDate}`);
+
+    const packageStats = await db
+      .select({
+        packageType: payments.packageType,
+        count: sql`count(*)::integer`,
+        revenue: sql`sum(amount)::integer`,
+      })
+      .from(payments)
+      .where(sql`created_at >= ${startDate}`)
+      .groupBy(payments.packageType);
+
+    res.json({
+      summary: result,
+      packageStats,
+    });
+  });
+
+
+  // Payments
+  //app.post("/api/payments", async (req, res) => { // This route is replaced above.
+  //  if (!req.isAuthenticated()) return res.sendStatus(401);
+  //
+  //  const { packageType } = req.body;
+  //  const amount = packagePrices[packageType as keyof typeof packagePrices];
+  //  if (!amount) return res.status(400).send("Invalid package type");
+  //
+  //  const validUntil = new Date();
+  //  switch (packageType) {
+  //    case "single": validUntil.setHours(validUntil.getHours() + 1); break;
+  //    case "daily": validUntil.setDate(validUntil.getDate() + 1); break;
+  //    case "weekly": validUntil.setDate(validUntil.getDate() + 7); break;
+  //    case "monthly": validUntil.setMonth(validUntil.getMonth() + 1); break;
+  //  }
+  //
+  //  const payment = await storage.createPayment({
+  //    userId: req.user.id,
+  //    amount,
+  //    packageType,
+  //    validUntil,
+  //    createdAt: new Date(),
+  //    status: "completed",
+  //    username: req.user.username,
+  //  });
+  //
+  //  res.json(payment);
+  //});
 
   const httpServer = createServer(app);
   return httpServer;
