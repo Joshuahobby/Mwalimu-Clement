@@ -35,6 +35,7 @@ interface FlutterwaveResponse {
     authorization?: {
       redirect?: string;
       mode?: string;
+      validate_instructions?: string;
     };
   };
 }
