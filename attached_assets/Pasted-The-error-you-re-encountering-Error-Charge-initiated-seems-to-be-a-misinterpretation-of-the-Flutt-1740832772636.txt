@@ -1,0 +1,100 @@
+The error you're encountering, Error: Charge initiated, seems to be a misinterpretation of the Flutterwave response. When Flutterwave returns a status of "success" with a message of "Charge initiated," it typically means the payment process has started successfully, and you should proceed with the redirect to complete the payment.
+
+However, your code is throwing an error instead of handling this as a successful initiation. Here's how you can adjust your code to handle this scenario correctly:
+
+Adjusted Code Snippet
+typescript
+import axios from 'axios';
+
+const flwPublicKey = 'YOUR_PUBLIC_KEY';
+const flwSecretKey = 'YOUR_SECRET_KEY';
+const flwBaseUrl = 'https://api.flutterwave.com/v3';
+
+export const initiatePayment = async (payload: {
+  tx_ref: string;
+  amount: number;
+  currency: string;
+  redirect_url: string;
+  email: string;
+  phone_number: string;
+  fullname: string;
+  client_ip: string;
+  device_fingerprint: string;
+  meta: any;
+}) => {
+  try {
+    const response = await axios.post(`${flwBaseUrl}/payments`, {
+      tx_ref: payload.tx_ref,
+      amount: payload.amount,
+      currency: payload.currency,
+      payment_options: 'mobilemoney', // Specify mobile money as the payment option
+      redirect_url: payload.redirect_url,
+      customer: {
+        email: payload.email,
+        phone_number: payload.phone_number,
+        name: payload.fullname,
+      },
+      client_ip: payload.client_ip,
+      device_fingerprint: payload.device_fingerprint,
+      meta: payload.meta,
+    }, {
+      headers: {
+        'Authorization': `Bearer ${flwSecretKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.status === 200 && response.data.status === 'success') {
+      const redirectUrl = response.data.meta.authorization?.redirect;
+      if (redirectUrl) {
+        return redirectUrl; // Redirect the user to this URL
+      } else {
+        throw new Error('Redirect URL not found in response');
+      }
+    } else {
+      throw new Error('Failed to initiate payment');
+    }
+  } catch (error) {
+    console.error('Error initiating payment:', error);
+  }
+};
+Handling the Response
+In your error handling, you're currently throwing an error when the charge is initiated. Instead, you should redirect the user to the provided URL to complete the payment:
+
+typescript
+// In your route handler
+initiatePayment(paymentPayload).then((redirectUrl) => {
+  if (redirectUrl) {
+    // Redirect the user to complete the payment
+    res.redirect(redirectUrl);
+  } else {
+    res.status(500).json({ message: 'Failed to initiate payment' });
+  }
+}).catch((error) => {
+  console.error('Error:', error);
+  res.status(500).json({ message: 'Failed to process payment', error: error.message });
+});
+Example Usage
+typescript
+const paymentPayload = {
+  tx_ref: "DRV_1740832609251_2",
+  amount: 200,
+  currency: "RWF",
+  redirect_url: "https://your-app.com/api/payments/verify",
+  email: "getrwanda@gmail.com",
+  phone_number: "0788331033",
+  fullname: "Joe Sure",
+  client_ip: "154.123.220.1",
+  device_fingerprint: "device_1740832609251",
+  meta: {
+    user_id: 2,
+    package_type: "single"
+  }
+};
+
+initiatePayment(paymentPayload).then((redirectUrl) => {
+  console.log('Redirecting to:', redirectUrl);
+}).catch((error) => {
+  console.error('Error:', error);
+});
+This approach should correctly handle the payment initiation and redirect the user to complete the payment

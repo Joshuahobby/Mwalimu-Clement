@@ -27,9 +27,15 @@ interface PaymentPayload {
 interface FlutterwaveResponse {
   status: string;
   message: string;
-  data: {
+  data?: {
     redirect?: string;
     link?: string;
+  };
+  meta?: {
+    authorization?: {
+      redirect?: string;
+      mode?: string;
+    };
   };
 }
 
@@ -85,14 +91,21 @@ export async function initiatePayment(
     const data = await response.json() as FlutterwaveResponse;
     console.log('Flutterwave response:', JSON.stringify(data, null, 2));
 
-    if (data.status === 'error' || (!data.data?.redirect && !data.data?.link)) {
+    if (data.status === 'error') {
       throw new Error(data.message || 'Failed to process payment');
+    }
+
+    // Handle both direct link and authorization redirect responses
+    const redirectLink = data.data?.link || data.data?.redirect || data.meta?.authorization?.redirect;
+
+    if (!redirectLink) {
+      throw new Error('No redirect URL found in response');
     }
 
     return {
       status: 'success',
       data: {
-        link: data.data.redirect || data.data.link,
+        link: redirectLink,
         tx_ref: tx_ref
       }
     };
