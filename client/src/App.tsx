@@ -9,6 +9,7 @@ import AuthPage from "@/pages/auth-page";
 import ExamPage from "@/pages/exam-page";
 import AdminPage from "@/pages/admin-page";
 import ProfilePage from "@/pages/profile-page";
+import ExamSimulationPage from "@/pages/exam-simulation-page";
 import { ProtectedRoute } from "./lib/protected-route";
 
 function Router() {
@@ -16,6 +17,7 @@ function Router() {
     <Switch>
       <ProtectedRoute path="/" component={HomePage} />
       <ProtectedRoute path="/exam" component={ExamPage} />
+      <ProtectedRoute path="/exam-simulation" component={ExamSimulationPage} />
       <ProtectedRoute path="/admin" component={AdminPage} adminOnly />
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <Route path="/auth" component={AuthPage} />

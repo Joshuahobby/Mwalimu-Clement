@@ -112,3 +112,49 @@ export const packagePrices = {
 } as const;
 
 export type PackageType = keyof typeof packagePrices;
+
+export const examSimulations = pgTable("exam_simulations", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  startTime: timestamp("start_time").notNull(),
+  endTime: timestamp("end_time"),
+  isCompleted: boolean("is_completed").default(false),
+  currentQuestionIndex: integer("current_question_index").default(0),
+  questions: json("questions").$type<number[]>().notNull(),
+  answers: json("answers").$type<number[]>(),
+  timePerQuestion: integer("time_per_question").default(60), // in seconds
+  showFeedback: boolean("show_feedback").default(true),
+  showTimer: boolean("show_timer").default(true),
+  allowSkip: boolean("allow_skip").default(true),
+  allowReview: boolean("allow_review").default(true),
+});
+
+export const examSimulationLogs = pgTable("exam_simulation_logs", {
+  id: serial("id").primaryKey(),
+  simulationId: integer("simulation_id").notNull(),
+  userId: integer("user_id").notNull(),
+  questionId: integer("question_id").notNull(),
+  timeSpent: integer("time_spent").notNull(), // in seconds
+  isCorrect: boolean("is_correct"),
+  answer: integer("answer"),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+});
+
+// Create insert schemas
+export const insertExamSimulationSchema = createInsertSchema(examSimulations).omit({
+  id: true,
+  isCompleted: true,
+  currentQuestionIndex: true,
+  answers: true,
+});
+
+export const insertExamSimulationLogSchema = createInsertSchema(examSimulationLogs).omit({
+  id: true,
+  timestamp: true,
+});
+
+// Export types
+export type ExamSimulation = typeof examSimulations.$inferSelect;
+export type InsertExamSimulation = z.infer<typeof insertExamSimulationSchema>;
+export type ExamSimulationLog = typeof examSimulationLogs.$inferSelect;
+export type InsertExamSimulationLog = z.infer<typeof insertExamSimulationLogSchema>;
