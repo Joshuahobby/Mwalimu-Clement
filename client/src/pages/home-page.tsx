@@ -9,7 +9,7 @@ import { useLocation } from "wouter";
 import { Clock, CalendarDays, CreditCard, BookOpen, Wallet, Building } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface PaymentResponse {
   status: string;
@@ -24,9 +24,42 @@ type PaymentMethod = 'card' | 'mobilemoney' | 'banktransfer';
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
+  const [location] = useLocation();
   const [selectedPackage, setSelectedPackage] = useState<keyof typeof packagePrices | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Handle payment status messages
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const paymentStatus = searchParams.get('payment');
+    const error = searchParams.get('error');
+
+    if (paymentStatus === 'success') {
+      toast({
+        title: "Payment Successful",
+        description: "Your payment has been processed successfully.",
+        variant: "default",
+      });
+    } else if (paymentStatus === 'failed') {
+      toast({
+        title: "Payment Failed",
+        description: "Your payment could not be processed. Please try again.",
+        variant: "destructive",
+      });
+    } else if (error) {
+      const errorMessages: Record<string, string> = {
+        missing_reference: "Payment reference not found.",
+        payment_not_found: "Payment record not found.",
+        verification_failed: "Could not verify payment status.",
+      };
+
+      toast({
+        title: "Payment Error",
+        description: errorMessages[error] || "An error occurred during payment.",
+        variant: "destructive",
+      });
+    }
+  }, [location, toast]);
 
   const { data: activePayment, isLoading: paymentLoading } = useQuery<Payment>({
     queryKey: ["/api/payments/active"],

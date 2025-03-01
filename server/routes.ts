@@ -307,14 +307,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(paymentResponse);
     } catch (error) {
       console.error('Payment creation error:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to process payment",
         error: error instanceof Error ? error.message : "Unknown error"
       });
     }
   });
 
-  // Payment verification webhook
+  // Payment verification webhook (for Flutterwave callbacks)
   app.post("/api/payments/verify", async (req, res) => {
     try {
       console.log('Payment verification webhook received:', req.body);
@@ -354,6 +354,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Payment verification error:', error);
       res.status(500).json({ message: "Failed to verify payment" });
+    }
+  });
+
+  // Payment verification redirect handler (for browser redirects)
+  app.get("/api/payments/verify", async (req, res) => {
+    try {
+      console.log('Payment verification redirect received:', req.query);
+
+      const { tx_ref, transaction_id, status } = req.query;
+
+      if (!tx_ref) {
+        return res.redirect('/?error=missing_reference');
+      }
+
+      if (status === 'successful') {
+        const transaction = await verifyPayment(tx_ref as string);
+
+        if (transaction.status === "successful") {
+          // Update payment status
+          const [payment] = await db
+            .update(payments)
+            .set({
+              status: "completed",
+              metadata: {
+                tx_ref,
+                transaction_id,
+                status
+              }
+            })
+            .where(eq(payments.metadata.tx_ref, tx_ref as string))
+            .returning();
+
+          if (!payment) {
+            return res.redirect('/?error=payment_not_found');
+          }
+
+          // Redirect to success page
+          return res.redirect('/?payment=success');
+        }
+      }
+
+      // If verification failed or status is not successful
+      return res.redirect('/?payment=failed');
+    } catch (error) {
+      console.error('Payment verification redirect error:', error);
+      return res.redirect('/?error=verification_failed');
     }
   });
 
