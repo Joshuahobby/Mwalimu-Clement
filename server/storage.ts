@@ -29,6 +29,7 @@ export interface IStorage {
   createQuestion(question: Omit<Question, "id">): Promise<Question>;
   updateQuestion(id: number, question: Partial<Question>): Promise<Question>;
   deleteQuestion(id: number): Promise<void>;
+  getQuestion(id: number): Promise<Question | undefined>;
 
   // Exam operations
   createExam(exam: Omit<Exam, "id">): Promise<Exam>;
@@ -140,6 +141,11 @@ export class DatabaseStorage implements IStorage {
 
   async deleteQuestion(id: number): Promise<void> {
     await db.delete(questions).where(eq(questions.id, id));
+  }
+
+  async getQuestion(id: number): Promise<Question | undefined> {
+    const [question] = await db.select().from(questions).where(eq(questions.id, id));
+    return question;
   }
 
   async createExam(exam: Omit<Exam, "id">): Promise<Exam> {
