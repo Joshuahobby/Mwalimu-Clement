@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Question, insertQuestionSchema, User, Payment, packagePrices, insertUserSchema, InsertUser } from "@shared/schema"; // Added import
+import { Question, insertQuestionSchema, User, Payment, packagePrices, insertUserSchema, InsertUser } from "@shared/schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
@@ -83,7 +83,7 @@ import {
 import { format } from "date-fns";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2 } from 'lucide-react'; // Added import
+import { Loader2 } from 'lucide-react';
 
 
 type AnalyticsData = {
@@ -144,8 +144,8 @@ export default function AdminPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
-  const [isAddUserOpen, setIsAddUserOpen] = useState(false); // Added state
-  const addUserForm = useForm({
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const addUserForm = useForm<InsertUser>({
     resolver: zodResolver(insertUserSchema),
     defaultValues: {
       username: "",
@@ -162,9 +162,13 @@ export default function AdminPage() {
           const errorData = await res.json();
           throw new Error(errorData.message || 'Failed to create user');
         }
-        return res.json();
+        const responseData = await res.json();
+        return responseData;
       } catch (error) {
-        throw error;
+        if (error instanceof Error) {
+          throw new Error(error.message);
+        }
+        throw new Error('An unexpected error occurred');
       }
     },
     onSuccess: () => {
@@ -178,7 +182,7 @@ export default function AdminPage() {
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: "Error creating user",
         description: error.message,
         variant: "destructive",
       });
@@ -448,7 +452,6 @@ export default function AdminPage() {
     URL.revokeObjectURL(url);
   };
 
-  // Add bulk action mutation
   const bulkActionMutation = useMutation({
     mutationFn: async ({ userIds, action }: { userIds: number[]; action: string }) => {
       const res = await apiRequest("POST", "/api/users/bulk-action", { userIds, action });
@@ -471,7 +474,6 @@ export default function AdminPage() {
     },
   });
 
-  // Add role update mutation
   const updateRoleMutation = useMutation({
     mutationFn: async ({ userId, role }: { userId: number; role: UserRole }) => {
       const res = await apiRequest("PATCH", `/api/users/${userId}/role`, { role });
@@ -1021,7 +1023,7 @@ export default function AdminPage() {
                       {sessions?.map((session) => (
                         <TableRow key={session.userId}>
                           <TableCell>{session.username}</TableCell>
-                          <TableCell>{format(new Date(session.lastActivity), 'PPp')}</TableCell>
+                          <TableCell>{format(newDate(session.lastActivity), 'PPp')}</TableCell>
                           <TableCell>{session.ipAddress}</TableCell>
                           <TableCell>{session.device}</TableCell>
                           <TableCell>
@@ -1067,7 +1069,8 @@ export default function AdminPage() {
                 <Input
                   type="password"
                   placeholder="New password"
-                  value={newPassword}                  onChange={(e) => setNewPassword(e.target.value)}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
                 />
               </div>
               <DialogFooter>
@@ -1130,7 +1133,6 @@ export default function AdminPage() {
             </DialogContent>
           </Dialog>
 
-          {/* Add User Dialog */}
           <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
             <DialogContent>
               <DialogHeader>
@@ -1148,8 +1150,11 @@ export default function AdminPage() {
                       <FormItem>
                         <FormLabel>Username</FormLabel>
                         <FormControl>
-                          <Input {...field} />
+                          <Input {...field} autoComplete="off" />
                         </FormControl>
+                        <FormDescription>
+                          Choose a unique username for the account
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -1161,8 +1166,11 @@ export default function AdminPage() {
                       <FormItem>
                         <FormLabel>Password</FormLabel>
                         <FormControl>
-                          <Input type="password" {...field} />
+                          <Input type="password" {...field} autoComplete="new-password" />
                         </FormControl>
+                        <FormDescription>
+                          Set a temporary password for the user
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -1185,12 +1193,18 @@ export default function AdminPage() {
                             <SelectItem value="admin">Admin</SelectItem>
                           </SelectContent>
                         </Select>
+                        <FormDescription>
+                          Select the user's role and permissions
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                   <DialogFooter>
-                    <Button type="submit" disabled={createUserMutation.isPending}>
+                    <Button
+                      type="submit"
+                      disabled={createUserMutation.isPending || !addUserForm.formState.isValid}
+                    >
                       {createUserMutation.isPending && (
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       )}
