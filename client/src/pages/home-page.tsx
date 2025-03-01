@@ -7,17 +7,13 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { Clock, CalendarDays, CreditCard, BookOpen } from "lucide-react";
-import { FlutterWaveButton } from 'flutterwave-react-v3';
+import { apiRequest } from "@/lib/queryClient";
 
-interface FlutterwaveResponse {
+interface PaymentResponse {
   status: string;
-  message: string;
-  data?: {
-    id: string;
+  data: {
+    link: string;
     tx_ref: string;
-    amount: number;
-    currency: string;
-    status: string;
   };
 }
 
@@ -31,40 +27,25 @@ export default function HomePage() {
     retry: false,
   });
 
-  const getFlutterwaveConfig = (packageType: keyof typeof packagePrices) => ({
-    public_key: import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY,
-    tx_ref: `DRV_${Date.now()}_${user?.id}`,
-    amount: packagePrices[packageType],
-    currency: 'RWF',
-    payment_options: 'mobilemoney',
-    customer: {
-      email: 'customer@example.com', // Valid test email
-      phone_number: '250784123456', // Valid test Rwanda number
-      name: user?.displayName || user?.username || 'Customer',
-    },
-    customizations: {
-      title: 'MWALIMU Clement',
-      description: `Payment for ${packageType} package`,
-      logo: '', // Add your logo URL here
-    },
-    meta: {
-      user_id: user?.id,
-      package_type: packageType,
-    },
-  });
+  const handlePayment = async (packageType: keyof typeof packagePrices) => {
+    try {
+      const response = await apiRequest("POST", "/api/payments", { packageType });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to initiate payment");
+      }
 
-  const handlePaymentCallback = (response: FlutterwaveResponse, packageType: keyof typeof packagePrices) => {
-    if (response.status === 'successful') {
-      toast({
-        title: "Payment successful",
-        description: "Your payment has been processed successfully",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/payments/active"] });
-      setLocation("/exam");
-    } else {
+      const data: PaymentResponse = await response.json();
+      if (data.status === 'success' && data.data.link) {
+        // Redirect to Flutterwave payment page
+        window.location.href = data.data.link;
+      } else {
+        throw new Error("Invalid payment response");
+      }
+    } catch (error) {
       toast({
         title: "Payment failed",
-        description: response.message || "Failed to process payment",
+        description: error instanceof Error ? error.message : "Failed to process payment",
         variant: "destructive",
       });
     }
@@ -169,13 +150,12 @@ export default function HomePage() {
                 <p className="text-3xl font-bold">{pkg.price} RWF</p>
               </CardContent>
               <CardFooter>
-                <FlutterWaveButton
-                  {...getFlutterwaveConfig(pkg.type)}
-                  text="Purchase"
+                <Button
                   className="w-full"
-                  callback={(response) => handlePaymentCallback(response, pkg.type)}
-                  onClose={() => console.log("Payment modal closed")}
-                />
+                  onClick={() => handlePayment(pkg.type)}
+                >
+                  Purchase
+                </Button>
               </CardFooter>
             </Card>
           ))}

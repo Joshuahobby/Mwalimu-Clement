@@ -48,7 +48,7 @@ export async function initiatePayment(
     console.log('Flutterwave response:', JSON.stringify(data, null, 2));
 
     if (data.status === 'error') {
-      throw new Error(data.message || 'Failed to initiate payment');
+      throw new Error(data.message || 'Failed to process payment');
     }
 
     return {

@@ -1,0 +1,157 @@
+To integrate Flutterwave's Rwanda Mobile Money payment into your TypeScript web app, you can use the `flutterwave-node-v3` package. However, as noted in the search results, there are some challenges with TypeScript support due to the lack of official type definitions. Here's a basic example of how you might set up the integration:
+
+### Step 1: Install `flutterwave-node-v3`
+
+First, install the `flutterwave-node-v3` package using npm or yarn:
+
+```bash
+npm install flutterwave-node-v3
+```
+
+### Step 2: Create Custom TypeScript Definitions
+
+Since there are no official TypeScript types for `flutterwave-node-v3`, you'll need to create custom type definitions. Here's an example of how you might define them in a file named `flutterwave-node-v3.d.ts`:
+
+```typescript
+declare module 'flutterwave-node-v3' {
+  interface PaymentInitiateResponse {
+    status: string;
+    message: string;
+    data: {
+      link: string;
+    };
+  }
+
+  interface TransactionVerifyResponse {
+    status: string;
+    message: string;
+    data: {
+      tx_ref: string;
+      flw_ref: string;
+      currency: string;
+      status: string;
+    };
+  }
+
+  interface Flutterwave {
+    Charge: {
+      card: (payload: {
+        tx_ref: string;
+        amount: number;
+        currency: string;
+        redirect_url: string;
+        customer: {
+          email: string;
+        };
+        payment_options: string; // Optional
+      }) => Promise;
+    };
+
+    TransactionVerify: (payload: { id: string }) => Promise;
+  }
+
+  const Flutterwave: new (publicKey: string, secretKey: string) => Flutterwave;
+  export = Flutterwave;
+}
+```
+
+### Step 3: Implement Payment Logic
+
+Now, you can use the `flutterwave-node-v3` package to implement the payment logic in your TypeScript app. Here's an example:
+
+```typescript
+import Flutterwave from "flutterwave-node-v3";
+import { FLWPUBK, FLWSECK } from "../config";
+
+const flw = new Flutterwave(FLWPUBK, FLWSECK);
+
+export const initiatePayment = async (payload: {
+  tx_ref: string;
+  amount: number;
+  currency: string;
+  email: string;
+  redirect_url: string;
+}) => {
+  try {
+    const response = await flw.Charge.card({
+      tx_ref: payload.tx_ref,
+      amount: payload.amount,
+      currency: payload.currency,
+      redirect_url: payload.redirect_url,
+      customer: {
+        email: payload.email,
+      },
+      payment_options: "mobilemoney", // Specify mobile money as the payment option
+    });
+
+    if (response.status === "success") {
+      return response.meta.authorization.redirect; // Payment link
+    } else {
+      throw new Error(response.message || "Failed to initiate payment.");
+    }
+  } catch (error) {
+    console.error("Error initiating payment:", error);
+  }
+};
+```
+
+### Step 4: Handle Payment Response
+
+After initiating the payment, you'll need to handle the payment response. This typically involves verifying the transaction status on your server.
+
+```typescript
+export const verifyTransaction = async (transactionId: string) => {
+  try {
+    const response = await flw.TransactionVerify({ id: transactionId });
+    if (response.status === "success") {
+      console.log("Transaction verified successfully:", response.data);
+      // Update your database or perform necessary actions
+    } else {
+      throw new Error("Failed to verify transaction.");
+    }
+  } catch (error) {
+    console.error("Error verifying transaction:", error);
+  }
+};
+```
+
+### Example Use Case
+
+To use this in your app, you might call `initiatePayment` when a user clicks a "Pay Now" button:
+
+```typescript
+import express, { Request, Response } from 'express';
+const app = express();
+
+app.post('/initiate-payment', async (req: Request, res: Response) => {
+  const payload = {
+    tx_ref: Date.now().toString(),
+    amount: 1000, // Example amount in RWF
+    currency: 'RWF',
+    email: 'customer@example.com',
+    redirect_url: 'https://your-app.com/payment-success',
+  };
+
+  try {
+    const paymentLink = await initiatePayment(payload);
+    res.json({ paymentLink });
+  } catch (error) {
+    res.status(500).json({ message: 'Error initiating payment' });
+  }
+});
+```
+
+This setup should help you integrate Flutterwave's Rwanda Mobile Money payment into your TypeScript web app. Make sure to replace placeholders like `FLWPUBK`, `FLWSECK`, and `https://your-app.com/payment-success` with your actual Flutterwave keys and callback URL.
+
+Citations:
+[1] https://dev.to/walex_eniola_017a0a46b88a/need-help-setting-up-flutterwave-with-typescript-expressjs-sequelize-and-postgresql-jee
+[2] https://blog.idrisolubisi.com/how-to-build-a-wallet-system-with-flutterwave-payment-integration-into-nodejs-application
+[3] https://dev.to/flutterwaveeng/how-to-integrate-flutterwave-payment-gateway-into-your-flutter-app-5e8
+[4] https://www.npmjs.com/package/flutterwave-node
+[5] https://developer.flutterwave.com/docs/inline
+[6] https://developer.flutterwave.com/docs/introduction-6
+[7] https://github.com/Hubertformin/flutterwave-node
+[8] https://github.com/Flutterwave/Node-v3
+
+---
+Answer from Perplexity: pplx.ai/share
