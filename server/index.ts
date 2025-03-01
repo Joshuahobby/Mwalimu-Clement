@@ -1,11 +1,20 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { monitorDatabase, healthCheck } from "./middleware/db-monitor";
+import { checkDatabaseHealth, closePool } from "./db";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Add database monitoring middleware
+app.use(monitorDatabase);
+
+// Add health check endpoint before Vite middleware to avoid HTML response
+app.get('/api/health', healthCheck);
+
+// Add request logging with sensitive data masking
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -13,7 +22,18 @@ app.use((req, res, next) => {
 
   const originalResJson = res.json;
   res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
+    // Mask sensitive data
+    if (bodyJson && typeof bodyJson === 'object') {
+      const maskedBody = { ...bodyJson };
+      ['password', 'token', 'secret'].forEach(key => {
+        if (key in maskedBody) {
+          maskedBody[key] = '***';
+        }
+      });
+      capturedJsonResponse = maskedBody;
+    } else {
+      capturedJsonResponse = bodyJson;
+    }
     return originalResJson.apply(res, [bodyJson, ...args]);
   };
 
@@ -37,27 +57,41 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Check database health before starting the server
+  const isDatabaseHealthy = await checkDatabaseHealth();
+  if (!isDatabaseHealthy) {
+    log('Database health check failed. Exiting...');
+    process.exit(1);
+  }
+
   const server = await registerRoutes(app);
 
+  // Global error handler with proper error response formatting
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
+    // Log error details but send limited info to client
+    console.error('Error:', {
+      status,
+      message,
+      stack: err.stack,
+      details: err.details || {}
+    });
+
+    // Send sanitized error response
+    res.status(status).json({ 
+      message: status === 500 ? "Internal Server Error" : message,
+      code: status
+    });
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client
   const port = 5000;
   server.listen({
     port,
@@ -65,5 +99,16 @@ app.use((req, res, next) => {
     reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
+  });
+
+  // Graceful shutdown with proper cleanup
+  process.on('SIGTERM', async () => {
+    log('SIGTERM received. Starting graceful shutdown...');
+    await Promise.all([
+      new Promise((resolve) => server.close(resolve)),
+      closePool() // Close database connections
+    ]);
+    log('Server and database connections closed');
+    process.exit(0);
   });
 })();

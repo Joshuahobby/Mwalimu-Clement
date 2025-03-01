@@ -1,11 +1,14 @@
-import { User, InsertUser, Question, Exam, Payment, Settings, PackageType } from "@shared/schema";
+import { User, InsertUser, Question, Exam, Payment, Settings, PackageType, users, questions, exams, payments, settings } from "@shared/schema";
+import { db } from "./db";
 import session from "express-session";
+import { eq } from "drizzle-orm";
 import createMemoryStore from "memorystore";
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
 import { log } from "./vite";
+import connectPg from "connect-pg-simple";
 
-const MemoryStore = createMemoryStore(session);
+const PostgresSessionStore = connectPg(session);
 const scryptAsync = promisify(scrypt);
 
 async function hashPassword(password: string) {
@@ -43,24 +46,18 @@ export interface IStorage {
   sessionStore: session.Store;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private questions: Map<number, Question>;
-  private exams: Map<number, Exam>;
-  private payments: Map<number, Payment>;
-  private settings: Map<string, Settings>;
+export class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
-  private currentId: number;
 
   constructor() {
-    this.users = new Map();
-    this.questions = new Map();
-    this.exams = new Map();
-    this.payments = new Map();
-    this.settings = new Map();
-    this.currentId = 1;
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000, // Clear expired entries every 24h
+    if (!process.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL must be set");
+    }
+    this.sessionStore = new PostgresSessionStore({
+      conObject: {
+        connectionString: process.env.DATABASE_URL,
+      },
+      createTableIfMissing: true,
     });
 
     // Create default admin user
@@ -69,36 +66,32 @@ export class MemStorage implements IStorage {
 
   private async createDefaultAdmin() {
     try {
-      const adminPassword = await hashPassword("admin");
-      const admin: User = {
-        id: this.currentId++,
-        username: "admin",
-        password: adminPassword,
-        isAdmin: true,
-        role: "admin",
-        isActive: true,
-        theme: "system",
-        preferences: {
-          emailNotifications: true,
-          smsNotifications: false,
-          language: "en"
-        }
-      };
-      this.users.set(admin.id, admin);
-      log("Default admin user created");
+      const existingAdmin = await this.getUserByUsername("admin");
+      if (!existingAdmin) {
+        const adminPassword = await hashPassword("admin");
+        const admin: InsertUser = {
+          username: "admin",
+          password: adminPassword,
+          role: "admin",
+        };
+        await this.createUser(admin);
+        log("Default admin user created");
+      }
     } catch (error) {
-      log(`Error creating default admin: ${error.message}`);
+      if (error instanceof Error) {
+        log(`Error creating default admin: ${error.message}`);
+      }
     }
   }
 
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
@@ -107,98 +100,103 @@ export class MemStorage implements IStorage {
       throw new Error("Username already exists");
     }
 
-    const id = this.currentId++;
-    const hashedPassword = await hashPassword(insertUser.password);
-
-    const user: User = {
-      id,
-      username: insertUser.username,
-      password: hashedPassword,
+    const [user] = await db.insert(users).values({
+      ...insertUser,
       isAdmin: insertUser.role === "admin",
-      role: insertUser.role,
-      isActive: true,
       theme: "system",
       preferences: {
         emailNotifications: true,
         smsNotifications: false,
         language: "en"
-      }
-    };
+      },
+    }).returning();
 
-    this.users.set(id, user);
     log(`New user created: ${user.username}`);
     return user;
   }
 
   async getQuestions(): Promise<Question[]> {
-    return Array.from(this.questions.values());
+    return db.select().from(questions);
   }
 
   async getQuestionsByCategory(category: string): Promise<Question[]> {
-    return Array.from(this.questions.values()).filter(q => q.category === category);
+    return db.select().from(questions).where(eq(questions.category, category));
   }
 
   async createQuestion(question: Omit<Question, "id">): Promise<Question> {
-    const id = this.currentId++;
-    const newQuestion = { ...question, id };
-    this.questions.set(id, newQuestion);
+    const [newQuestion] = await db.insert(questions).values(question).returning();
     return newQuestion;
   }
 
   async updateQuestion(id: number, questionUpdate: Partial<Question>): Promise<Question> {
-    const question = this.questions.get(id);
-    if (!question) throw new Error("Question not found");
-    const updatedQuestion = { ...question, ...questionUpdate };
-    this.questions.set(id, updatedQuestion);
+    const [updatedQuestion] = await db
+      .update(questions)
+      .set(questionUpdate)
+      .where(eq(questions.id, id))
+      .returning();
+    if (!updatedQuestion) throw new Error("Question not found");
     return updatedQuestion;
   }
 
   async deleteQuestion(id: number): Promise<void> {
-    this.questions.delete(id);
+    await db.delete(questions).where(eq(questions.id, id));
   }
 
   async createExam(exam: Omit<Exam, "id">): Promise<Exam> {
-    const id = this.currentId++;
-    const newExam = { ...exam, id };
-    this.exams.set(id, newExam);
+    const [newExam] = await db.insert(exams).values(exam).returning();
     return newExam;
   }
 
   async getExam(id: number): Promise<Exam | undefined> {
-    return this.exams.get(id);
+    const [exam] = await db.select().from(exams).where(eq(exams.id, id));
+    return exam;
   }
 
   async updateExam(id: number, examUpdate: Partial<Exam>): Promise<Exam> {
-    const exam = this.exams.get(id);
-    if (!exam) throw new Error("Exam not found");
-    const updatedExam = { ...exam, ...examUpdate };
-    this.exams.set(id, updatedExam);
+    const [updatedExam] = await db
+      .update(exams)
+      .set(examUpdate)
+      .where(eq(exams.id, id))
+      .returning();
+    if (!updatedExam) throw new Error("Exam not found");
     return updatedExam;
   }
 
   async createPayment(payment: Omit<Payment, "id">): Promise<Payment> {
-    const id = this.currentId++;
-    const newPayment = { ...payment, id };
-    this.payments.set(id, newPayment);
+    const [newPayment] = await db.insert(payments).values(payment).returning();
     return newPayment;
   }
 
   async getActivePayment(userId: number): Promise<Payment | undefined> {
     const now = new Date();
-    return Array.from(this.payments.values()).find(
-      p => p.userId === userId && p.validUntil > now
-    );
+    const [activePayment] = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.userId, userId))
+      .where('valid_until > CURRENT_TIMESTAMP');
+    return activePayment;
   }
 
   async getSetting(key: string): Promise<Settings | undefined> {
-    return this.settings.get(key);
+    const [setting] = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, key));
+    return setting;
   }
 
   async setSetting(key: string, value: any): Promise<Settings> {
-    const setting = { id: this.currentId++, key, value };
-    this.settings.set(key, setting);
+    const [setting] = await db
+      .insert(settings)
+      .values({ key, value })
+      .onConflictDoUpdate({
+        target: settings.key,
+        set: { value },
+      })
+      .returning();
     return setting;
   }
 }
 
-export const storage = new MemStorage();
+// Export an instance of DatabaseStorage
+export const storage = new DatabaseStorage();
