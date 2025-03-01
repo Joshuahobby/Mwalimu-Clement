@@ -279,26 +279,28 @@ export default function AdminPage() {
 
   const updatePricingMutation = useMutation({
     mutationFn: async (data: { type: string; price: number; isEnabled: boolean }) => {
-      const res = await apiRequest("PATCH", "/api/pricing", data);
-      if (!res.ok) {
-        throw new Error(`Failed to update pricing: ${res.statusText}`);
+      try {
+        const res = await apiRequest("PATCH", "/api/pricing", data);
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(`Failed to update pricing: ${res.statusText}. ${errorText}`);
+        }
+        return { success: true, type: data.type, price: data.price, isEnabled: data.isEnabled };
+      } catch (error) {
+        console.error("Pricing update error:", error);
+        throw error;
       }
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        return res.json();
-      }
-      throw new Error("Invalid response from server");
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/pricing"] });
       toast({
         title: "Success",
-        description: "Pricing updated successfully",
+        description: `Pricing updated successfully for ${data.type}`,
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: "Error updating pricing",
         description: error.message,
         variant: "destructive",
       });
@@ -1052,16 +1054,13 @@ export default function AdminPage() {
                           <TableCell>
                             <Switch
                               defaultChecked={true}
+                              disabled={updatePricingMutation.isPending}
                               onCheckedChange={(isEnabled) => {
-                                try {
-                                  updatePricingMutation.mutate({
-                                    type: pkg.type,
-                                    price: packagePrices[pkg.type as keyof typeof packagePrices],
-                                    isEnabled,
-                                  });
-                                } catch (error) {
-                                  console.error("Error updating pricing:", error);
-                                }
+                                updatePricingMutation.mutate({
+                                  type: pkg.type,
+                                  price: packagePrices[pkg.type as keyof typeof packagePrices],
+                                  isEnabled,
+                                });
                               }}
                             />
                           </TableCell>
