@@ -284,6 +284,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         default: return res.status(400).json({ message: "Invalid package type" });
       }
 
+      // Check if user has email
+      if (!req.user.email) {
+        return res.status(400).json({ 
+          message: "Email is required for payment. Please update your profile with a valid email address.",
+          code: "EMAIL_REQUIRED"
+        });
+      }
+
       // Generate transaction reference
       const tx_ref = `DRV_${Date.now()}_${req.user.id}`;
 
@@ -311,11 +319,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log('Created payment record:', payment);
-
-      // Make sure we have an email for the user
-      if (!req.user.email) {
-        console.log('User has no email, using generated one for payment');
-      }
 
       // Initiate Flutterwave payment
       const paymentResponse = await initiatePayment(

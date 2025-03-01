@@ -95,6 +95,20 @@ export default function HomePage() {
 
       if (!response.ok) {
         const errorData = await response.json();
+
+        // Handle missing email error
+        if (errorData.code === "EMAIL_REQUIRED") {
+          toast({
+            title: "Email Required",
+            description: "Please update your profile with a valid email address before making a payment.",
+            variant: "destructive",
+            duration: 5000,
+          });
+          // Redirect to profile page
+          setLocation("/profile");
+          return;
+        }
+
         throw new Error(errorData.message || 'Failed to process payment');
       }
 
