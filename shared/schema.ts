@@ -6,6 +6,10 @@ import { z } from "zod";
 export const userRoles = ["admin", "instructor", "student"] as const;
 export type UserRole = typeof userRoles[number];
 
+// Define theme type
+export const themeTypes = ["light", "dark", "system"] as const;
+export type ThemeType = typeof themeTypes[number];
+
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
@@ -13,6 +17,23 @@ export const users = pgTable("users", {
   isAdmin: boolean("is_admin").default(false).notNull(),
   role: text("role", { enum: userRoles }).default("student").notNull(),
   isActive: boolean("is_active").default(true).notNull(),
+  // New profile fields
+  displayName: text("display_name"),
+  bio: text("bio"),
+  email: text("email"),
+  phoneNumber: text("phone_number"),
+  avatarUrl: text("avatar_url"),
+  theme: text("theme", { enum: themeTypes }).default("system").notNull(),
+  preferences: json("preferences").$type<{
+    emailNotifications: boolean;
+    smsNotifications: boolean;
+    language: string;
+  }>().default({
+    emailNotifications: true,
+    smsNotifications: false,
+    language: "en"
+  }).notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const questions = pgTable("questions", {
@@ -45,7 +66,7 @@ export const payments = pgTable("payments", {
   validUntil: timestamp("valid_until").notNull(),
   createdAt: timestamp("created_at").notNull(),
   status: text("status", { enum: paymentStatuses }).default("pending").notNull(),
-  username: text("username") // Added username field
+  username: text("username")
 });
 
 export const settings = pgTable("settings", {
@@ -54,9 +75,19 @@ export const settings = pgTable("settings", {
   value: json("value").notNull(),
 });
 
+// Update the insertUserSchema to include new profile fields
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
+});
+
+export const updateProfileSchema = createInsertSchema(users).pick({
+  displayName: true,
+  bio: true,
+  email: true,
+  phoneNumber: true,
+  theme: true,
+  preferences: true,
 });
 
 export const insertQuestionSchema = createInsertSchema(questions);
@@ -65,6 +96,7 @@ export const insertPaymentSchema = createInsertSchema(payments);
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type UpdateProfile = z.infer<typeof updateProfileSchema>;
 export type Question = typeof questions.$inferSelect;
 export type Exam = typeof exams.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
