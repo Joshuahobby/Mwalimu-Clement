@@ -12,11 +12,17 @@ interface PaymentPayload {
   amount: number;
   currency: string;
   redirect_url: string;
-  email: string;
-  phone_number: string;
-  fullname: string;
-  client_ip: string;
-  device_fingerprint: string;
+  payment_options?: string;
+  customer: {
+    email: string;
+    phone_number: string;
+    name: string;
+  };
+  customizations?: {
+    title: string;
+    description: string;
+    logo: string;
+  };
   meta: {
     user_id: number;
     package_type: string;
@@ -55,11 +61,17 @@ export async function initiatePayment(
     amount,
     currency: 'RWF',
     redirect_url: redirectUrl,
-    email: 'getrwanda@gmail.com', // Test email for Rwanda
-    phone_number: '0788331033', // Test phone number for Rwanda
-    fullname: user.displayName || user.username,
-    client_ip: '154.123.220.1',
-    device_fingerprint: `device_${Date.now()}`,
+    payment_options: paymentMethod,
+    customer: {
+      email: 'getrwanda@gmail.com', // Test email for Rwanda
+      phone_number: '0788331033', // Test phone number for Rwanda
+      name: user.displayName || user.username
+    },
+    customizations: {
+      title: 'MWALIMU Clement',
+      description: `Payment for ${packageType} package`,
+      logo: 'https://your-logo-url.com/logo.png' // Replace with your actual logo URL
+    },
     meta: {
       user_id: user.id,
       package_type: packageType
