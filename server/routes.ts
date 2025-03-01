@@ -284,7 +284,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         default: return res.status(400).json({ message: "Invalid package type" });
       }
 
-      // Create pending payment record
+      // Create pending payment record with tx_ref in metadata
+      const tx_ref = `DRV_${Date.now()}_${req.user.id}`;
       const payment = await storage.createPayment({
         userId: req.user.id,
         amount,
@@ -292,7 +293,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         validUntil,
         createdAt: new Date(),
         status: "pending",
-        username: req.user.username
+        username: req.user.username,
+        metadata: {
+          tx_ref,
+          payment_method: paymentMethod
+        }
       });
 
       // Initiate Flutterwave payment
@@ -300,7 +305,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amount,
         req.user,
         packageType,
-        `${req.protocol}://${req.get('host')}/api/payments/verify_by_reference`, //Corrected URL
+        `${req.protocol}://${req.get('host')}/api/payments/verify_by_reference`,
         paymentMethod
       );
 
@@ -315,7 +320,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Payment verification webhook (for Flutterwave callbacks)
-  app.post("/api/payments/verify_by_reference", async (req, res) => { //Corrected URL
+  app.post("/api/payments/verify_by_reference", async (req, res) => {
     try {
       console.log('Payment verification webhook received:', req.body);
 
@@ -337,7 +342,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               flutterwave_tx_ref: tx_ref
             }
           })
-          .where(eq(payments.metadata.tx_ref, tx_ref))
+          .where(
+            and(
+              eq(payments.status, "pending"),
+              sql`payments.metadata->>'tx_ref' = ${tx_ref}`
+            )
+          )
           .returning();
 
         if (!payment) {
@@ -358,7 +368,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Payment verification redirect handler (for browser redirects)
-  app.get("/api/payments/verify_by_reference", async (req, res) => { //Corrected URL
+  app.get("/api/payments/verify_by_reference", async (req, res) => {
     try {
       console.log('Payment verification redirect received:', req.query);
 
@@ -384,7 +394,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 status: transaction.status
               }
             })
-            .where(eq(payments.metadata.tx_ref, tx_ref as string))
+            .where(
+              and(
+                eq(payments.status, "pending"),
+                sql`payments.metadata->>'tx_ref' = ${tx_ref}`
+              )
+            )
             .returning();
 
           if (!payment) {

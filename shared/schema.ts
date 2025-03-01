@@ -80,6 +80,11 @@ export const payments = pgTable("payments", {
   createdAt: timestamp("created_at").notNull(),
   status: text("status", { enum: paymentStatuses }).default("pending").notNull(),
   username: text("username"),
+  metadata: json("metadata").$type<{
+    tx_ref?: string;
+    transaction_id?: string;
+    status?: string;
+  }>(),
 }, (table) => {
   return {
     userIdIdx: index("payment_user_id_idx").on(table.userId),
