@@ -17,7 +17,7 @@ export async function initiatePayment(
   redirectUrl: string
 ) {
   const tx_ref = `DRV_${Date.now()}_${user.id}`;
-  
+
   const payload = {
     tx_ref,
     amount,
@@ -26,7 +26,7 @@ export async function initiatePayment(
     payment_options: 'mobilemoneyrwanda',
     customer: {
       email: user.email || `${user.username}@example.com`,
-      phonenumber: user.phoneNumber || '',
+      phonenumber: user.phoneNumber || '25078123456', // Default test phone number for Rwanda
       name: user.displayName || user.username,
     },
     customizations: {
@@ -41,7 +41,14 @@ export async function initiatePayment(
   };
 
   try {
+    console.log('Initiating Flutterwave payment with payload:', JSON.stringify(payload, null, 2));
     const response = await flw.Charge.card(payload);
+    console.log('Flutterwave response:', JSON.stringify(response, null, 2));
+
+    if (response.status === 'error') {
+      throw new Error(response.message || 'Payment initiation failed');
+    }
+
     return {
       status: 'success',
       data: {
@@ -57,7 +64,14 @@ export async function initiatePayment(
 
 export async function verifyPayment(txRef: string) {
   try {
+    console.log('Verifying payment for txRef:', txRef);
     const response = await flw.Transaction.verify({ id: txRef });
+    console.log('Verification response:', JSON.stringify(response, null, 2));
+
+    if (response.status === 'error') {
+      throw new Error(response.message || 'Payment verification failed');
+    }
+
     return response.data;
   } catch (error) {
     console.error('Flutterwave payment verification error:', error);
