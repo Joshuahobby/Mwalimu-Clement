@@ -2,11 +2,17 @@ import { pgTable, text, serial, integer, boolean, json, timestamp } from "drizzl
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Define role type
+export const userRoles = ["admin", "instructor", "student"] as const;
+export type UserRole = typeof userRoles[number];
+
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   isAdmin: boolean("is_admin").default(false).notNull(),
+  role: text("role", { enum: userRoles }).default("student").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
 });
 
 export const questions = pgTable("questions", {
@@ -27,6 +33,10 @@ export const exams = pgTable("exams", {
   answers: json("answers").$type<number[]>(),
 });
 
+// Define payment status type
+export const paymentStatuses = ["pending", "completed", "failed", "refunded"] as const;
+export type PaymentStatus = typeof paymentStatuses[number];
+
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
@@ -34,6 +44,8 @@ export const payments = pgTable("payments", {
   packageType: text("package_type").notNull(),
   validUntil: timestamp("valid_until").notNull(),
   createdAt: timestamp("created_at").notNull(),
+  status: text("status", { enum: paymentStatuses }).default("pending").notNull(),
+  username: text("username") // Added username field
 });
 
 export const settings = pgTable("settings", {
