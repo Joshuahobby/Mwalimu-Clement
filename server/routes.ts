@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertQuestionSchema, packagePrices, examSimulations, examSimulationLogs } from "@shared/schema";
+import { insertQuestionSchema, packagePrices } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
 
@@ -258,7 +258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(updatedPackage);
   });
 
-  // Simplified payment routes
+  // Simplified Payment Routes
   app.post("/api/payments", async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -267,10 +267,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let validUntil = new Date();
       let packageType = req.body.packageType;
 
-      // Handle package
+      // Get package price
       amount = packagePrices[packageType as keyof typeof packagePrices];
-      if (!amount) return res.status(400).json({ message: "Invalid package type" });
+      if (!amount) {
+        return res.status(400).json({ message: "Invalid package type" });
+      }
 
+      // Calculate validity period
       switch (packageType) {
         case "single": validUntil.setHours(validUntil.getHours() + 1); break;
         case "daily": validUntil.setDate(validUntil.getDate() + 1); break;
@@ -279,18 +282,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         default: return res.status(400).json({ message: "Invalid package type" });
       }
 
-      const [payment] = await db
-        .insert(payments)
-        .values({
-          userId: req.user.id,
-          amount,
-          packageType,
-          validUntil,
-          createdAt: new Date(),
-          status: "completed",
-          username: req.user.username // Assuming username is available, adjust as needed
-        })
-        .returning();
+      // Create payment record
+      const payment = await storage.createPayment({
+        userId: req.user.id,
+        amount,
+        packageType,
+        validUntil,
+        createdAt: new Date(),
+        status: "completed",
+        username: req.user.username
+      });
 
       res.json(payment);
     } catch (error) {
@@ -303,26 +304,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/payments/active", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      if (!req.isAuthenticated()) return res.sendStatus(401);
 
-    const [activePayment] = await db
-      .select()
-      .from(payments)
-      .where(
-        and(
-          eq(payments.userId, req.user.id),
-          eq(payments.status, "completed"),
-          sql`valid_until > CURRENT_TIMESTAMP`
-        )
-      )
-      .orderBy(desc(payments.createdAt))
-      .limit(1);
+      const payment = await storage.getActivePayment(req.user.id);
 
-    if (!activePayment) {
-      return res.status(404).json({ message: "No active payment found" });
+      if (!payment) {
+        return res.status(404).json({ message: "No active payment found" });
+      }
+
+      res.json(payment);
+    } catch (error) {
+      console.error('Error fetching active payment:', error);
+      res.status(500).json({ message: "Failed to fetch active payment" });
     }
-
-    res.json(activePayment);
   });
 
   // Payment Analytics for Admin

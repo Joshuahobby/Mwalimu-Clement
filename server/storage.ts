@@ -1,7 +1,7 @@
 import { User, InsertUser, Question, Exam, Payment, Settings, PackageType, users, questions, exams, payments, settings } from "@shared/schema";
 import { db } from "./db";
 import session from "express-session";
-import { eq } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import createMemoryStore from "memorystore";
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
@@ -169,18 +169,38 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPayment(payment: Omit<Payment, "id">): Promise<Payment> {
-    const [newPayment] = await db.insert(payments).values(payment).returning();
-    return newPayment;
+    try {
+      const [newPayment] = await db
+        .insert(payments)
+        .values(payment)
+        .returning();
+      return newPayment;
+    } catch (error) {
+      console.error('Error creating payment:', error);
+      throw new Error('Failed to create payment');
+    }
   }
 
   async getActivePayment(userId: number): Promise<Payment | undefined> {
-    const now = new Date();
-    const [activePayment] = await db
-      .select()
-      .from(payments)
-      .where(eq(payments.userId, userId))
-      .where('valid_until > CURRENT_TIMESTAMP');
-    return activePayment;
+    try {
+      const [activePayment] = await db
+        .select()
+        .from(payments)
+        .where(
+          and(
+            eq(payments.userId, userId),
+            eq(payments.status, "completed"),
+            sql`valid_until > CURRENT_TIMESTAMP`
+          )
+        )
+        .orderBy(desc(payments.createdAt))
+        .limit(1);
+
+      return activePayment;
+    } catch (error) {
+      console.error('Error fetching active payment:', error);
+      throw new Error('Failed to fetch active payment');
+    }
   }
 
   async getSetting(key: string): Promise<Settings | undefined> {
@@ -204,5 +224,4 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-// Export an instance of DatabaseStorage
 export const storage = new DatabaseStorage();
