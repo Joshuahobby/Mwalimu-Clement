@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, json, timestamp, index, foreignKey } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, json, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -79,24 +79,12 @@ export const payments = pgTable("payments", {
   validUntil: timestamp("valid_until").notNull(),
   createdAt: timestamp("created_at").notNull(),
   status: text("status", { enum: paymentStatuses }).default("pending").notNull(),
-  transactionId: text("transaction_id"),
-  paymentMethod: text("payment_method"),
-  metadata: json("metadata").$type<{
-    customerName?: string;
-    email?: string;
-    phone?: string;
-    flutterwave_tx_ref?: string;
-    flutterwave_tx_id?: string;
-    notes?: string;
-  }>(),
-  refundReason: text("refund_reason"),
-  refundedAt: timestamp("refunded_at"),
+  username: text("username"),
 }, (table) => {
   return {
     userIdIdx: index("payment_user_id_idx").on(table.userId),
     statusIdx: index("payment_status_idx").on(table.status),
     createdAtIdx: index("payment_created_at_idx").on(table.createdAt),
-    validUntilIdx: index("payment_valid_until_idx").on(table.validUntil),
   };
 });
 
@@ -196,8 +184,6 @@ export const insertCustomPackageSchema = createInsertSchema(customPackages).omit
 
 export const insertPaymentSchema = createInsertSchema(payments).omit({
   id: true,
-  createdAt: true,
-  refundedAt: true,
 });
 
 export const packagePrices = {
