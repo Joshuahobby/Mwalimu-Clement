@@ -1,12 +1,25 @@
 import { useAuth } from "@/hooks/use-auth";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Payment, packagePrices } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { Clock, CalendarDays, CreditCard, BookOpen } from "lucide-react";
+import { FlutterWaveButton } from 'flutterwave-react-v3';
+
+interface FlutterwaveResponse {
+  status: string;
+  message: string;
+  data?: {
+    id: string;
+    tx_ref: string;
+    amount: number;
+    currency: string;
+    status: string;
+  };
+}
 
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
@@ -18,28 +31,44 @@ export default function HomePage() {
     retry: false,
   });
 
-  const paymentMutation = useMutation({
-    mutationFn: async (packageType: keyof typeof packagePrices) => {
-      const res = await apiRequest("POST", "/api/payments", { packageType });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to process payment");
-      }
-      const data = await res.json();
-      // Redirect to Flutterwave payment page
-      if (data.status === 'success' && data.data.link) {
-        window.location.href = data.data.link;
-      }
-      return data;
+  const getFlutterwaveConfig = (packageType: keyof typeof packagePrices) => ({
+    public_key: import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY,
+    tx_ref: `DRV_${Date.now()}_${user?.id}`,
+    amount: packagePrices[packageType],
+    currency: 'RWF',
+    payment_options: 'mobilemoney',
+    customer: {
+      email: 'customer@example.com', // Valid test email
+      phone_number: '250784123456', // Valid test Rwanda number
+      name: user?.displayName || user?.username || 'Customer',
     },
-    onError: (error: Error) => {
-      toast({
-        title: "Payment failed",
-        description: error.message,
-        variant: "destructive",
-      });
+    customizations: {
+      title: 'MWALIMU Clement',
+      description: `Payment for ${packageType} package`,
+      logo: '', // Add your logo URL here
+    },
+    meta: {
+      user_id: user?.id,
+      package_type: packageType,
     },
   });
+
+  const handlePaymentCallback = (response: FlutterwaveResponse, packageType: keyof typeof packagePrices) => {
+    if (response.status === 'successful') {
+      toast({
+        title: "Payment successful",
+        description: "Your payment has been processed successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/payments/active"] });
+      setLocation("/exam");
+    } else {
+      toast({
+        title: "Payment failed",
+        description: response.message || "Failed to process payment",
+        variant: "destructive",
+      });
+    }
+  };
 
   const packages = [
     {
@@ -140,13 +169,13 @@ export default function HomePage() {
                 <p className="text-3xl font-bold">{pkg.price} RWF</p>
               </CardContent>
               <CardFooter>
-                <Button
+                <FlutterWaveButton
+                  {...getFlutterwaveConfig(pkg.type)}
+                  text="Purchase"
                   className="w-full"
-                  onClick={() => paymentMutation.mutate(pkg.type)}
-                  disabled={paymentMutation.isPending}
-                >
-                  Purchase
-                </Button>
+                  callback={(response) => handlePaymentCallback(response, pkg.type)}
+                  onClose={() => console.log("Payment modal closed")}
+                />
               </CardFooter>
             </Card>
           ))}
