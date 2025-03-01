@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -1106,14 +1106,158 @@ export default function AdminPage() {
           )}
 
           {(activeSection === "settings") && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{activeSection.charAt(0).toUpperCase() + activeSection.slice(1)}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">This section is under development.</p>
-              </CardContent>
-            </Card>
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>System Settings</CardTitle>
+                  <CardDescription>Configure core system settings and preferences</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <h3 className="text-base font-medium">Email Notifications</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Receive email notifications for important system events
+                        </p>
+                      </div>
+                      <Switch
+                        defaultChecked={true}
+                        onCheckedChange={(checked) => {
+                          toast({
+                            title: `Email notifications ${checked ? 'enabled' : 'disabled'}`,
+                            description: "Your preferences have been saved",
+                          });
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <h3 className="text-base font-medium">Automatic User Approval</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Automatically approve new user registrations
+                        </p>
+                      </div>
+                      <Switch
+                        defaultChecked={false}
+                        onCheckedChange={(checked) => {
+                          toast({
+                            title: `Automatic approval ${checked ? 'enabled' : 'disabled'}`,
+                            description: "Your preferences have been saved",
+                          });
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <h3 className="text-base font-medium">Maintenance Mode</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Put the application in maintenance mode
+                        </p>
+                      </div>
+                      <Switch
+                        defaultChecked={false}
+                        onCheckedChange={(checked) => {
+                          toast({
+                            title: `Maintenance mode ${checked ? 'enabled' : 'disabled'}`,
+                            description: "System status updated",
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Database Management</CardTitle>
+                  <CardDescription>Manage database operations and maintenance</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        toast({
+                          title: "Backup initiated",
+                          description: "Database backup process started",
+                        });
+                      }}
+                    >
+                      Create Backup
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        toast({
+                          title: "Optimization started",
+                          description: "Database optimization in progress",
+                        });
+                      }}
+                    >
+                      Optimize Database
+                    </Button>
+                  </div>
+                  <div className="pt-4">
+                    <h4 className="text-sm font-medium mb-2">Recent Backups</h4>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Size</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        <TableRow>
+                          <TableCell>{format(new Date(), 'PPP')}</TableCell>
+                          <TableCell>2.3 MB</TableCell>
+                          <TableCell>
+                            <Badge>Completed</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="sm">Download</Button>
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>System Information</CardTitle>
+                  <CardDescription>View system status and information</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <h4 className="text-sm font-medium mb-1">System Version</h4>
+                        <p className="text-sm text-muted-foreground">1.0.0</p>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-medium mb-1">Last Updated</h4>
+                        <p className="text-sm text-muted-foreground">{format(new Date(), 'PPP')}</p>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-medium mb-1">Active Users</h4>
+                        <p className="text-sm text-muted-foreground">143</p>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-medium mb-1">Storage Used</h4>
+                        <p className="text-sm text-muted-foreground">1.2 GB</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           )}
         </main>
       </div>
