@@ -335,11 +335,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log('Payment verification webhook received:', req.body);
 
+      // Get Flutterwave signature from headers
+      const signature = req.headers['verif-hash'] || '';
+
+      // Verify signature if in production mode
+      if (process.env.NODE_ENV === 'production' && !verifyWebhookSignature(signature as string, req.body)) {
+        console.error('Invalid webhook signature');
+        return res.status(401).json({ message: "Invalid signature" });
+      }
+
       const tx_ref = req.body.tx_ref || req.body.txRef;
       if (!tx_ref) {
         return res.status(400).json({ message: "Missing transaction reference" });
       }
 
+      // Verify transaction with Flutterwave API
       const transaction = await verifyPayment(tx_ref);
 
       if (transaction.status === "successful") {
@@ -350,7 +360,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: "completed",
             metadata: {
               ...req.body,
-              flutterwave_tx_ref: tx_ref
+              flutterwave_tx_ref: tx_ref,
+              verified_at: new Date().toISOString(),
+              verification_method: 'webhook'
             }
           })
           .where(
@@ -367,14 +379,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         console.log('Payment completed successfully:', payment);
+        
+        // Webhook notification could be sent here to inform client about payment success
+        
         res.json({ status: "success", payment });
       } else {
         console.error('Payment verification failed. Status:', transaction.status);
-        res.status(400).json({ message: "Payment verification failed" });
+        
+        // Update payment record with failed status
+        await db
+          .update(payments)
+          .set({
+            status: "failed",
+            metadata: {
+              ...req.body,
+              flutterwave_tx_ref: tx_ref,
+              failed_at: new Date().toISOString(),
+              failure_reason: transaction.status
+            }
+          })
+          .where(
+            and(
+              eq(payments.status, "pending"),
+              sql`payments.metadata->>'tx_ref' = ${tx_ref}`
+            )
+          );
+        
+        res.status(400).json({ message: "Payment verification failed", status: transaction.status });
       }
     } catch (error) {
       console.error('Payment verification error:', error);
-      res.status(500).json({ message: "Failed to verify payment" });
+      res.status(500).json({ 
+        message: "Failed to verify payment", 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      });
     }
   });
 
@@ -386,6 +424,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { tx_ref, transaction_id, status } = req.query;
 
       if (!tx_ref) {
+        console.error('Missing transaction reference in redirect');
         return res.redirect('/?error=missing_reference');
       }
 
@@ -402,7 +441,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               metadata: {
                 tx_ref,
                 transaction_id,
-                status: transaction.status
+                status: transaction.status,
+                verified_at: new Date().toISOString(),
+                verification_method: 'redirect'
               }
             })
             .where(
@@ -415,22 +456,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           if (!payment) {
             console.error('Payment not found for tx_ref:', tx_ref);
-            return res.redirect('/?error=payment_not_found');
+            return res.redirect('/?error=payment_not_found&tx_ref=' + encodeURIComponent(tx_ref as string));
           }
 
           console.log('Payment completed successfully:', payment);
-          return res.redirect('/exam'); // Redirect to exam dashboard after successful payment
+          
+          // Check if the payment has already expired
+          const validUntil = new Date(payment.validUntil);
+          if (validUntil < new Date()) {
+            console.warn('Payment verified but already expired:', payment.id);
+            // Could extend validity here if desired
+          }
+          
+          return res.redirect('/exam?payment_success=true'); // Redirect to exam dashboard after successful payment
         } else {
           console.error('Payment verification failed. Status:', transaction.status);
-          return res.redirect('/?payment=failed');
+          return res.redirect('/?payment=failed&status=' + encodeURIComponent(transaction.status));
         }
       } catch (error) {
         console.error('Payment verification error:', error);
-        return res.redirect('/?error=verification_failed');
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return res.redirect('/?error=verification_failed&details=' + encodeURIComponent(errorMessage));
       }
     } catch (error) {
       console.error('Payment verification route error:', error);
-      return res.redirect('/?error=verification_failed');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return res.redirect('/?error=verification_failed&details=' + encodeURIComponent(errorMessage));
     }
   });
 
@@ -500,3 +551,127 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   return httpServer;
 }
+
+  // Add payment retry endpoint
+  app.post("/api/payments/retry", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.sendStatus(401);
+
+      const { paymentId } = req.body;
+      if (!paymentId) {
+        return res.status(400).json({ message: "Payment ID is required" });
+      }
+
+      // Get the failed payment
+      const [existingPayment] = await db
+        .select()
+        .from(payments)
+        .where(
+          and(
+            eq(payments.id, parseInt(paymentId)),
+            eq(payments.userId, req.user.id)
+          )
+        );
+
+      if (!existingPayment) {
+        return res.status(404).json({ message: "Payment not found" });
+      }
+
+      if (existingPayment.status === "completed") {
+        return res.status(400).json({ message: "Payment is already completed" });
+      }
+
+      // Generate new transaction reference
+      const tx_ref = `DRV_RETRY_${Date.now()}_${req.user.id}`;
+      const paymentMethod = req.body.paymentMethod || existingPayment.metadata?.payment_method || 'mobilemoney';
+
+      // Update the existing payment record with new tx_ref
+      await db
+        .update(payments)
+        .set({
+          status: "pending",
+          metadata: {
+            ...existingPayment.metadata,
+            tx_ref,
+            payment_method: paymentMethod,
+            retry_count: ((existingPayment.metadata?.retry_count || 0) + 1),
+            last_retry: new Date().toISOString()
+          }
+        })
+        .where(eq(payments.id, existingPayment.id));
+
+      // Initiate Flutterwave payment
+      const paymentResponse = await initiatePayment(
+        existingPayment.amount,
+        req.user,
+        existingPayment.packageType as any,
+        `${req.protocol}://${req.get('host')}/api/payments/verify_by_reference`,
+        paymentMethod
+      );
+
+      res.json(paymentResponse);
+    } catch (error) {
+      console.error('Payment retry error:', error);
+      res.status(500).json({
+        message: "Failed to retry payment",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+
+  // Admin refund endpoint
+  app.post("/api/admin/payments/:id/refund", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user.isAdmin) return res.sendStatus(403);
+
+      const paymentId = parseInt(req.params.id);
+      const { reason } = req.body;
+
+      // Get the payment
+      const [payment] = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.id, paymentId));
+
+      if (!payment) {
+        return res.status(404).json({ message: "Payment not found" });
+      }
+
+      if (payment.status !== "completed") {
+        return res.status(400).json({ message: "Only completed payments can be refunded" });
+      }
+
+      // Update payment status to refunded
+      const [refundedPayment] = await db
+        .update(payments)
+        .set({
+          status: "refunded",
+          metadata: {
+            ...payment.metadata,
+            refunded_at: new Date().toISOString(),
+            refund_reason: reason,
+            refunded_by: req.user.username,
+          }
+        })
+        .where(eq(payments.id, paymentId))
+        .returning();
+
+      // Here you would typically call Flutterwave's refund API
+      // This would depend on your specific Flutterwave integration
+      
+      // For now, we just mark as refunded in our database
+      console.log('Payment refunded:', refundedPayment);
+      
+      res.json({ 
+        message: "Payment refunded successfully", 
+        payment: refundedPayment 
+      });
+    } catch (error) {
+      console.error('Payment refund error:', error);
+      res.status(500).json({ 
+        message: "Failed to process refund", 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      });
+    }
+  });

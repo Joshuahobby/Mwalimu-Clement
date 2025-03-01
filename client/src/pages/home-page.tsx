@@ -80,6 +80,66 @@ export default function HomePage() {
         toast({
           title: "Mobile Money Payment (Test Mode)",
           description: "Since this is test mode, enter '123456' as the OTP in the next screen. This is the test OTP that works in Flutterwave's test environment.",
+
+  // Poll for payment status updates when there's a pending payment
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const tx_ref = searchParams.get('tx_ref');
+    
+    if (!tx_ref) return;
+    
+    let pollingInterval: NodeJS.Timeout;
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    const checkPaymentStatus = async () => {
+      try {
+        const response = await apiRequest('GET', `/api/payments/active`);
+        
+        if (response.ok) {
+          // Payment is successful and active
+          const payment = await response.json();
+          toast({
+            title: "Payment Successful",
+            description: `Your ${payment.packageType} package is now active until ${new Date(payment.validUntil).toLocaleString()}`,
+            variant: "default",
+            duration: 5000,
+          });
+          
+          // Clear URL parameters
+          window.history.replaceState({}, document.title, window.location.pathname);
+          
+          // Invalidate queries to refresh data
+          queryClient.invalidateQueries({ queryKey: ["/api/payments/active"] });
+          
+          // Stop polling
+          clearInterval(pollingInterval);
+        } else if (attempts >= maxAttempts) {
+          // Stop polling after max attempts
+          clearInterval(pollingInterval);
+          
+          // Prompt user to try manually refreshing
+          toast({
+            title: "Payment Status Unknown",
+            description: "We couldn't confirm your payment status. Please refresh the page or check 'My Account'.",
+            variant: "destructive",
+            duration: 10000,
+          });
+        }
+        
+        attempts++;
+      } catch (error) {
+        console.error("Error checking payment status:", error);
+      }
+    };
+    
+    // Start polling for payment status
+    pollingInterval = setInterval(checkPaymentStatus, 3000);
+    
+    // Clean up interval on component unmount
+    return () => clearInterval(pollingInterval);
+  }, [location, toast]);
+
           duration: 10000,
         });
       }

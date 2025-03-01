@@ -175,3 +175,25 @@ export async function verifyPayment(txRef: string) {
     throw error;
   }
 }
+
+// Verify Flutterwave webhook signature
+export function verifyWebhookSignature(signature: string, data: any) {
+  try {
+    if (!process.env.FLUTTERWAVE_SECRET_KEY || !signature) {
+      console.error('Missing secret key or signature for webhook verification');
+      return false;
+    }
+
+    // Create HMAC hash with SHA512
+    const crypto = require('crypto');
+    const hash = crypto.createHmac('sha512', process.env.FLUTTERWAVE_SECRET_KEY)
+      .update(JSON.stringify(data))
+      .digest('hex');
+
+    // Compare signature with computed hash
+    return hash === signature;
+  } catch (error) {
+    console.error('Error verifying webhook signature:', error);
+    return false;
+  }
+}
