@@ -6,9 +6,85 @@ import { insertQuestionSchema, packagePrices, payments } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { initiatePayment, verifyPayment, verifyWebhookSignature } from "./services/flutterwave";
+import { updateProfileSchema } from "@shared/schema"; // Assuming this schema is defined elsewhere
+import { users } from "@shared/schema"; // Assuming the users schema is defined elsewhere
+
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
+
+  // Add these new routes after setupAuth(app)
+
+  // Profile Update Route
+  app.patch("/api/user/profile", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const validation = updateProfileSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ errors: validation.error.errors });
+      }
+
+      const [updatedUser] = await db
+        .update(users)
+        .set({
+          ...validation.data,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, req.user.id))
+        .returning();
+
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Update the session user data
+      Object.assign(req.user, updatedUser);
+      res.json(updatedUser);
+    } catch (error) {
+      console.error('Profile update error:', error);
+      res.status(500).json({
+        message: "Failed to update profile",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Avatar Upload Route
+  app.post("/api/user/avatar", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      // Here you would typically:
+      // 1. Handle the file upload (we'll need to add multer middleware)
+      // 2. Process the image
+      // 3. Store it (for now we'll just update the avatarUrl)
+
+      // For demo purposes, we'll just update with a placeholder URL
+      const [updatedUser] = await db
+        .update(users)
+        .set({
+          avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${req.user.username}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, req.user.id))
+        .returning();
+
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Update the session user data
+      Object.assign(req.user, updatedUser);
+      res.json(updatedUser);
+    } catch (error) {
+      console.error('Avatar upload error:', error);
+      res.status(500).json({
+        message: "Failed to upload avatar",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
 
   // Questions Management
   app.get("/api/questions", async (req, res) => {

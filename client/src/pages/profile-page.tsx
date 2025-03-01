@@ -23,15 +23,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, Upload } from "lucide-react";
 
@@ -42,22 +33,20 @@ export default function ProfilePage() {
   const form = useForm<UpdateProfile>({
     resolver: zodResolver(updateProfileSchema),
     defaultValues: {
-      displayName: user?.displayName || "",
-      bio: user?.bio || "",
+      displayName: user?.displayName || user?.username || "",
       email: user?.email || "",
       phoneNumber: user?.phoneNumber || "",
-      theme: user?.theme || "system",
-      preferences: user?.preferences || {
-        emailNotifications: true,
-        smsNotifications: false,
-        language: "en",
-      },
+      avatarUrl: user?.avatarUrl || "",
     },
   });
 
   const updateProfileMutation = useMutation({
     mutationFn: async (data: UpdateProfile) => {
       const res = await apiRequest("PATCH", "/api/user/profile", data);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to update profile");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -81,6 +70,10 @@ export default function ProfilePage() {
       const formData = new FormData();
       formData.append("avatar", file);
       const res = await apiRequest("POST", "/api/user/avatar", formData);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to upload avatar");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -99,9 +92,7 @@ export default function ProfilePage() {
     },
   });
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -110,13 +101,13 @@ export default function ProfilePage() {
           <CardHeader>
             <CardTitle>Profile Settings</CardTitle>
             <CardDescription>
-              Manage your profile information and preferences
+              Update your profile information and preferences
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="mb-8 flex flex-col items-center">
               <Avatar className="h-24 w-24 mb-4">
-                <AvatarImage src={user.avatarUrl} />
+                <AvatarImage src={user.avatarUrl || undefined} />
                 <AvatarFallback>
                   {user.displayName?.[0] || user.username[0].toUpperCase()}
                 </AvatarFallback>
@@ -163,27 +154,10 @@ export default function ProfilePage() {
                     <FormItem>
                       <FormLabel>Display Name</FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <Input {...field} value={field.value || ""} />
                       </FormControl>
                       <FormDescription>
-                        This is how your name will appear to other users.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="bio"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Bio</FormLabel>
-                      <FormControl>
-                        <Textarea {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        Tell others a little bit about yourself.
+                        This is how your name will appear to other users
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -197,8 +171,16 @@ export default function ProfilePage() {
                     <FormItem>
                       <FormLabel>Email</FormLabel>
                       <FormControl>
-                        <Input type="email" {...field} />
+                        <Input 
+                          type="email" 
+                          {...field} 
+                          value={field.value || ""} 
+                          required 
+                        />
                       </FormControl>
+                      <FormDescription>
+                        Your email is required for payment processing
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -211,102 +193,11 @@ export default function ProfilePage() {
                     <FormItem>
                       <FormLabel>Phone Number</FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <Input {...field} value={field.value || ""} />
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="theme"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Theme</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select your preferred theme" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="light">Light</SelectItem>
-                          <SelectItem value="dark">Dark</SelectItem>
-                          <SelectItem value="system">System</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="preferences.emailNotifications"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                      <div className="space-y-0.5">
-                        <FormLabel>Email Notifications</FormLabel>
-                        <FormDescription>
-                          Receive email notifications about your exam results and important updates.
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="preferences.smsNotifications"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                      <div className="space-y-0.5">
-                        <FormLabel>SMS Notifications</FormLabel>
-                        <FormDescription>
-                          Receive SMS notifications about your exam schedule.
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="preferences.language"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Language</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select your preferred language" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="en">English</SelectItem>
-                          <SelectItem value="fr">French</SelectItem>
-                          <SelectItem value="rw">Kinyarwanda</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <FormDescription>
+                        Your phone number for mobile money payments
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

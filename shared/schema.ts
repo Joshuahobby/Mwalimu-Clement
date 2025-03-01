@@ -162,11 +162,12 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export const updateProfileSchema = createInsertSchema(users).pick({
   displayName: true,
-  bio: true,
   email: true,
   phoneNumber: true,
-  theme: true,
-  preferences: true,
+  avatarUrl: true,
+}).extend({
+  email: z.string().email("Invalid email address").optional(),
+  phoneNumber: z.string().min(10, "Phone number must be at least 10 digits").optional(),
 });
 
 export const insertQuestionSchema = createInsertSchema(questions);
