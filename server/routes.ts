@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { insertQuestionSchema, packagePrices, payments } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
-import { initiatePayment, verifyPayment } from "./services/flutterwave";
+import { initiatePayment, verifyPayment, verifyWebhookSignature } from "./services/flutterwave";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -287,7 +287,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate transaction reference
       const tx_ref = `DRV_${Date.now()}_${req.user.id}`;
 
-      // Create pending payment record with tx_ref in metadata
+      // Create pending payment record
       const [payment] = await db
         .insert(payments)
         .values({
@@ -300,7 +300,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           username: req.user.username,
           metadata: {
             tx_ref,
-            payment_method: paymentMethod
+            payment_method: paymentMethod,
+            created_at: new Date().toISOString()
           }
         })
         .returning();
@@ -315,7 +316,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user.email) {
         console.log('User has no email, using generated one for payment');
       }
-      
+
       // Initiate Flutterwave payment
       const paymentResponse = await initiatePayment(
         amount,
@@ -385,8 +386,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         console.log('Payment completed successfully:', payment);
 
-        // Webhook notification could be sent here to inform client about payment success
-
         res.json({ status: "success", payment });
       } else {
         console.error('Payment verification failed. Status:', transaction.status);
@@ -434,6 +433,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       try {
+        // Verify transaction with Flutterwave
         const transaction = await verifyPayment(tx_ref as string);
         console.log('Verification response:', JSON.stringify(transaction, null, 2));
 
@@ -496,12 +496,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`Extended expired payment ${payment.id} validity to ${newValidUntil}`);
           }
 
-          // Redirect to payment status page with tx_ref
-          return res.redirect(`/payment/status?tx_ref=${tx_ref}&status=success`);
+          // Redirect to user's dashboard after successful payment
+          return res.redirect('/exam');
         } else {
           console.error('Payment verification failed. Status:', transaction.status);
-          // Redirect to payment status page with failure information
-          return res.redirect(`/payment/status?tx_ref=${tx_ref}&status=${transaction.status}`);
+          return res.redirect('/?payment=failed');
         }
       } catch (error) {
         console.error('Payment verification error:', error);

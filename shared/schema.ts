@@ -84,6 +84,15 @@ export const payments = pgTable("payments", {
     tx_ref?: string;
     transaction_id?: string;
     status?: string;
+    payment_method?: string;
+    verified_at?: string;
+    created_at?: string;
+    failed_at?: string;
+    failure_reason?: string;
+    verification_method?: 'webhook' | 'redirect' | 'manual_check';
+    originally_expired?: boolean;
+    original_valid_until?: Date;
+    extended_at?: string;
   }>(),
 }, (table) => {
   return {
