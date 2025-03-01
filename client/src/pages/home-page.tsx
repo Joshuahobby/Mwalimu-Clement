@@ -17,6 +17,9 @@ interface PaymentResponse {
     link: string;
     tx_ref: string;
   };
+  meta?: {
+    tx_ref: string;
+  };
 }
 
 type PaymentMethod = 'card' | 'mobilemoney' | 'banktransfer';
@@ -80,22 +83,71 @@ export default function HomePage() {
         toast({
           title: "Mobile Money Payment (Test Mode)",
           description: "Since this is test mode, enter '123456' as the OTP in the next screen. This is the test OTP that works in Flutterwave's test environment.",
+          variant: "default",
+          duration: 10000,
+        });
+      }
+
+      const response = await apiRequest('POST', '/api/payments', {
+        packageType,
+        paymentMethod
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to process payment');
+      }
+
+      const paymentResponse: PaymentResponse = await response.json();
+
+      // Store the tx_ref in localStorage for later verification
+      if (paymentResponse.meta?.tx_ref) {
+        localStorage.setItem('pending_payment_tx_ref', paymentResponse.meta.tx_ref);
+        localStorage.setItem('pending_payment_time', new Date().toISOString());
+      }
+
+      // Show success toast before redirect
+      toast({
+        title: "Payment Initiated",
+        description: "You'll be redirected to complete your payment",
+        variant: "default",
+        duration: 3000,
+      });
+
+      // Redirect to Flutterwave checkout page
+      if (paymentResponse.data?.link) {
+        window.location.href = paymentResponse.data.link;
+      } else {
+        // If no redirect link (which shouldn't happen), go to payment status page
+        setLocation(`/payment/status?tx_ref=${paymentResponse.meta?.tx_ref}`);
+      }
+
+      setIsProcessing(false);
+    } catch (error) {
+      setIsProcessing(false);
+      toast({
+        title: "Payment Error",
+        description: error instanceof Error ? error.message : "Failed to process payment",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Poll for payment status updates when there's a pending payment
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const tx_ref = searchParams.get('tx_ref');
-    
+
     if (!tx_ref) return;
-    
+
     let pollingInterval: NodeJS.Timeout;
     let attempts = 0;
     const maxAttempts = 10;
-    
+
     const checkPaymentStatus = async () => {
       try {
         const response = await apiRequest('GET', `/api/payments/active`);
-        
+
         if (response.ok) {
           // Payment is successful and active
           const payment = await response.json();
@@ -105,19 +157,19 @@ export default function HomePage() {
             variant: "default",
             duration: 5000,
           });
-          
+
           // Clear URL parameters
           window.history.replaceState({}, document.title, window.location.pathname);
-          
+
           // Invalidate queries to refresh data
           queryClient.invalidateQueries({ queryKey: ["/api/payments/active"] });
-          
+
           // Stop polling
           clearInterval(pollingInterval);
         } else if (attempts >= maxAttempts) {
           // Stop polling after max attempts
           clearInterval(pollingInterval);
-          
+
           // Prompt user to try manually refreshing
           toast({
             title: "Payment Status Unknown",
@@ -126,52 +178,20 @@ export default function HomePage() {
             duration: 10000,
           });
         }
-        
+
         attempts++;
       } catch (error) {
         console.error("Error checking payment status:", error);
       }
     };
-    
+
     // Start polling for payment status
     pollingInterval = setInterval(checkPaymentStatus, 3000);
-    
+
     // Clean up interval on component unmount
     return () => clearInterval(pollingInterval);
   }, [location, toast]);
 
-          duration: 10000,
-        });
-      }
-
-      const response = await apiRequest("POST", "/api/payments", {
-        packageType,
-        paymentMethod
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Failed to initiate payment");
-      }
-
-      const data: PaymentResponse = await response.json();
-
-      if (data.status === 'success' && data.data.link) {
-        // Redirect to Flutterwave payment page
-        window.location.href = data.data.link;
-      } else {
-        throw new Error("Invalid payment response");
-      }
-    } catch (error) {
-      toast({
-        title: "Payment failed",
-        description: error instanceof Error ? error.message : "Failed to process payment",
-        variant: "destructive",
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   const paymentMethods = [
     {
