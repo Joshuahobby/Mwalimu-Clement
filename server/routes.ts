@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertQuestionSchema, packagePrices } from "@shared/schema";
+import { insertQuestionSchema, packagePrices, payments } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { initiatePayment, verifyPayment } from "./services/flutterwave";
@@ -300,7 +300,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amount,
         req.user,
         packageType,
-        `${req.protocol}://${req.get('host')}/api/payments/verify`,
+        `${req.protocol}://${req.get('host')}/api/payments/verify_by_reference`, //Corrected URL
         paymentMethod
       );
 
@@ -315,7 +315,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Payment verification webhook (for Flutterwave callbacks)
-  app.post("/api/payments/verify", async (req, res) => {
+  app.post("/api/payments/verify_by_reference", async (req, res) => { //Corrected URL
     try {
       console.log('Payment verification webhook received:', req.body);
 
@@ -358,7 +358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Payment verification redirect handler (for browser redirects)
-  app.get("/api/payments/verify", async (req, res) => {
+  app.get("/api/payments/verify_by_reference", async (req, res) => { //Corrected URL
     try {
       console.log('Payment verification redirect received:', req.query);
 
@@ -368,8 +368,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.redirect('/?error=missing_reference');
       }
 
-      if (status === 'successful') {
+      try {
         const transaction = await verifyPayment(tx_ref as string);
+        console.log('Verification response:', JSON.stringify(transaction, null, 2));
 
         if (transaction.status === "successful") {
           // Update payment status
@@ -380,25 +381,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
               metadata: {
                 tx_ref,
                 transaction_id,
-                status
+                status: transaction.status
               }
             })
             .where(eq(payments.metadata.tx_ref, tx_ref as string))
             .returning();
 
           if (!payment) {
+            console.error('Payment not found for tx_ref:', tx_ref);
             return res.redirect('/?error=payment_not_found');
           }
 
-          // Redirect to success page
+          console.log('Payment completed successfully:', payment);
           return res.redirect('/?payment=success');
+        } else {
+          console.error('Payment verification failed. Status:', transaction.status);
+          return res.redirect('/?payment=failed');
         }
+      } catch (error) {
+        console.error('Payment verification error:', error);
+        return res.redirect('/?error=verification_failed');
       }
-
-      // If verification failed or status is not successful
-      return res.redirect('/?payment=failed');
     } catch (error) {
-      console.error('Payment verification redirect error:', error);
+      console.error('Payment verification route error:', error);
       return res.redirect('/?error=verification_failed');
     }
   });
