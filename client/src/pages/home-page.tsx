@@ -13,7 +13,7 @@ export default function HomePage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
-  const { data: activePayment } = useQuery<Payment>({
+  const { data: activePayment, isLoading: paymentLoading } = useQuery<Payment>({
     queryKey: ["/api/payments/active"],
     retry: false,
   });
@@ -29,11 +29,11 @@ export default function HomePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/payments/active"] });
-      setLocation("/exam");
       toast({
         title: "Payment successful",
         description: "You can now start your exam",
       });
+      setLocation("/exam");
     },
     onError: (error: Error) => {
       toast({
@@ -111,7 +111,7 @@ export default function HomePage() {
                 </CardDescription>
               </CardHeader>
               <CardFooter>
-                <Button 
+                <Button
                   variant="secondary"
                   onClick={() => setLocation("/exam-simulation")}
                   className="flex items-center gap-2"

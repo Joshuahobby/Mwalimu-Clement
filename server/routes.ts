@@ -2,10 +2,9 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertQuestionSchema, packagePrices, examSimulations, examSimulationLogs, insertCustomPackageSchema, customPackages, payments } from "@shared/schema";
+import { insertQuestionSchema, packagePrices, examSimulations, examSimulationLogs } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
-import { queryClient } from './queryClient';
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -259,30 +258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(updatedPackage);
   });
 
-  // Enhanced Payment Routes
-  app.get("/api/packages", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-
-    // Get both default and custom packages
-    const customPkgs = await db
-      .select()
-      .from(customPackages)
-      .where(eq(customPackages.isActive, true));
-
-    const defaultPkgs = Object.entries(packagePrices).map(([type, price]) => ({
-      id: null,
-      name: type.charAt(0).toUpperCase() + type.slice(1),
-      description: `${type} access to exams`,
-      price,
-      duration: type === 'single' ? 1 :
-                type === 'daily' ? 24 :
-                type === 'weekly' ? 168 : 720,
-      isDefault: true
-    }));
-
-    res.json([...defaultPkgs, ...customPkgs]);
-  });
-
+  // Simplified payment routes
   app.post("/api/payments", async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -291,7 +267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let validUntil = new Date();
       let packageType = req.body.packageType;
 
-      // Handle default package
+      // Handle package
       amount = packagePrices[packageType as keyof typeof packagePrices];
       if (!amount) return res.status(400).json({ message: "Invalid package type" });
 
@@ -312,17 +288,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           validUntil,
           createdAt: new Date(),
           status: "completed",
-          transactionId: `TXN_${Date.now()}`,
-          paymentMethod: "direct",
-          metadata: {
-            customerName: req.user.displayName || req.user.username,
-            email: req.user.email,
-            phone: req.user.phoneNumber,
-          }
+          username: req.user.username // Assuming username is available, adjust as needed
         })
         .returning();
 
-      queryClient.invalidateQueries({ queryKey: ["/api/payments/active"] });
       res.json(payment);
     } catch (error) {
       console.error('Payment creation error:', error);
