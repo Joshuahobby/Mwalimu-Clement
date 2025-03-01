@@ -54,7 +54,7 @@ export async function initiatePayment(
     return {
       status: 'success',
       data: {
-        link: data.data.redirect,
+        link: data.meta.authorization.redirect,
         tx_ref: tx_ref
       }
     };
