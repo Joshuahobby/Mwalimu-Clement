@@ -1,14 +1,11 @@
-import Flutterwave from 'flutterwave-node-v3';
 import { User } from '@shared/schema';
+import fetch from 'node-fetch';
 
 if (!process.env.FLUTTERWAVE_SECRET_KEY || !process.env.FLUTTERWAVE_PUBLIC_KEY) {
   throw new Error('Flutterwave credentials not found');
 }
 
-const flw = new Flutterwave(
-  process.env.FLUTTERWAVE_PUBLIC_KEY,
-  process.env.FLUTTERWAVE_SECRET_KEY
-);
+const FLUTTERWAVE_API_URL = 'https://api.flutterwave.com/v3';
 
 export async function initiatePayment(
   amount: number,
@@ -23,9 +20,7 @@ export async function initiatePayment(
     amount,
     currency: 'RWF',
     redirect_url: redirectUrl,
-    payment_type: 'mobilemoneyrw',
-    order_id: tx_ref,
-    email: user.email || 'customer@example.com', // Valid email format for test mode
+    email: 'customer@example.com', // Valid email format for test mode
     phone_number: '250784123456', // Test phone number for Rwanda
     fullname: user.displayName || user.username,
     client_ip: '154.123.220.1',
@@ -38,17 +33,28 @@ export async function initiatePayment(
 
   try {
     console.log('Initiating Rwanda Mobile Money payment with payload:', JSON.stringify(payload, null, 2));
-    const response = await flw.MobileMoney.rwanda(payload);
-    console.log('Flutterwave response:', JSON.stringify(response, null, 2));
 
-    if (response.status === 'error') {
-      throw new Error(response.message || 'Failed to initiate payment');
+    const response = await fetch(`${FLUTTERWAVE_API_URL}/charges?type=mobile_money_rwanda`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+    console.log('Flutterwave response:', JSON.stringify(data, null, 2));
+
+    if (data.status === 'error') {
+      throw new Error(data.message || 'Failed to initiate payment');
     }
 
     return {
       status: 'success',
       data: {
-        link: response.data.redirect,
+        link: data.data.redirect,
         tx_ref: tx_ref
       }
     };
@@ -61,14 +67,23 @@ export async function initiatePayment(
 export async function verifyPayment(txRef: string) {
   try {
     console.log('Verifying payment for txRef:', txRef);
-    const response = await flw.Transaction.verify({ id: txRef });
-    console.log('Verification response:', JSON.stringify(response, null, 2));
 
-    if (response.status === 'error') {
-      throw new Error(response.message || 'Payment verification failed');
+    const response = await fetch(`${FLUTTERWAVE_API_URL}/transactions/${txRef}/verify`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const data = await response.json();
+    console.log('Verification response:', JSON.stringify(data, null, 2));
+
+    if (data.status === 'error') {
+      throw new Error(data.message || 'Payment verification failed');
     }
 
-    return response.data;
+    return data.data;
   } catch (error) {
     console.error('Flutterwave payment verification error:', error);
     throw new Error('Failed to verify payment');
