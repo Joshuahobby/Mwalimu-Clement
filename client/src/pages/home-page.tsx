@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
-import { Clock, CalendarDays, CreditCard } from "lucide-react";
+import { Clock, CalendarDays, CreditCard, BookOpen } from "lucide-react";
 
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
@@ -83,7 +83,7 @@ export default function HomePage() {
 
       <main className="container mx-auto px-4 py-8">
         {activePayment ? (
-          <div className="mb-8">
+          <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
                 <CardTitle>Active Subscription</CardTitle>
@@ -93,6 +93,24 @@ export default function HomePage() {
               </CardHeader>
               <CardFooter>
                 <Button onClick={() => setLocation("/exam")}>Start New Exam</Button>
+              </CardFooter>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Practice Mode</CardTitle>
+                <CardDescription>
+                  Try our interactive exam simulation mode
+                </CardDescription>
+              </CardHeader>
+              <CardFooter>
+                <Button 
+                  variant="secondary"
+                  onClick={() => setLocation("/exam-simulation")}
+                  className="flex items-center gap-2"
+                >
+                  <BookOpen className="h-4 w-4" />
+                  Start Practice Mode
+                </Button>
               </CardFooter>
             </Card>
           </div>
