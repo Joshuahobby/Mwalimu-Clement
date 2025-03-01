@@ -20,8 +20,8 @@ export async function initiatePayment(
     amount,
     currency: 'RWF',
     redirect_url: redirectUrl,
-    email: 'customer@example.com', // Valid email format for test mode
-    phone_number: '250784123456', // Test phone number for Rwanda
+    email: 'getrwanda@gmail.com', // Test email for Rwanda
+    phone_number: '0788331033', // Test phone number for Rwanda
     fullname: user.displayName || user.username,
     client_ip: '154.123.220.1',
     device_fingerprint: `device_${Date.now()}`,

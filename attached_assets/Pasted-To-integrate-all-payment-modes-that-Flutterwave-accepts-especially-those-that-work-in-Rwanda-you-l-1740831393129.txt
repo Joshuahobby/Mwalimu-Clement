@@ -1,0 +1,97 @@
+To integrate all payment modes that Flutterwave accepts, especially those that work in Rwanda, you'll need to support multiple payment channels. Here's a guide on how to do it:
+
+Supported Payment Modes in Rwanda
+In Rwanda, Flutterwave supports the following payment modes:
+
+Card Payments: Visa, Mastercard, etc.
+
+Mobile Money: Airtel, MTN
+
+Bank Transfer: Not explicitly listed but can be supported through Flutterwave's bank transfer options.
+
+Integration Steps
+Setup Flutterwave Account and API Keys:
+
+Ensure you have a Flutterwave account and API keys (public and secret).
+
+Install Flutterwave SDK:
+
+For a TypeScript project, you might not have an official SDK, so you'll interact directly with the Flutterwave API.
+
+Implement Payment Logic:
+
+Here's an example of how you might implement payment logic for different modes:
+
+typescript
+import axios from 'axios';
+
+const flwPublicKey = 'YOUR_PUBLIC_KEY';
+const flwSecretKey = 'YOUR_SECRET_KEY';
+const flwBaseUrl = 'https://api.flutterwave.com/v3';
+
+// Function to initiate payment
+export const initiatePayment = async (payload: {
+  tx_ref: string;
+  amount: number;
+  currency: string;
+  paymentMethod: string; // e.g., card, mobilemoney, banktransfer
+  customer: {
+    email: string;
+    phone_number: string;
+  };
+}) => {
+  try {
+    const response = await axios.post(`${flwBaseUrl}/payments`, {
+      tx_ref: payload.tx_ref,
+      amount: payload.amount,
+      currency: payload.currency,
+      payment_options: payload.paymentMethod,
+      customer: {
+        email: payload.customer.email,
+        phone_number: payload.customer.phone_number,
+      },
+    }, {
+      headers: {
+        'Authorization': `Bearer ${flwSecretKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.status === 200) {
+      return response.data;
+    } else {
+      throw new Error('Failed to initiate payment');
+    }
+  } catch (error) {
+    console.error('Error initiating payment:', error);
+  }
+};
+
+// Example usage for different payment modes
+const cardPayment = {
+  tx_ref: Date.now().toString(),
+  amount: 1000,
+  currency: 'RWF',
+  paymentMethod: 'card',
+  customer: {
+    email: 'customer@example.com',
+    phone_number: '0781234567',
+  },
+};
+
+const mobileMoneyPayment = {
+  tx_ref: Date.now().toString(),
+  amount: 1000,
+  currency: 'RWF',
+  paymentMethod: 'mobilemoney',
+  customer: {
+    email: 'customer@example.com',
+    phone_number: '0781234567',
+  },
+};
+
+initiatePayment(cardPayment).then((response) => console.log(response));
+initiatePayment(mobileMoneyPayment).then((response) => console.log(response));
+Handle Payment Response:
+
+After initiating the payment, handle the response based on the payment method. For example, if it's a card payment, you might need to redirect the user to a payment page. For mobile money, you might need to handle the USSD code or link provided in the response.
