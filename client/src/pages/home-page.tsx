@@ -43,7 +43,7 @@ export default function HomePage() {
       if (paymentMethod === 'mobilemoney') {
         toast({
           title: "Mobile Money Payment (Test Mode)",
-          description: "Since this is test mode, proceed to enter any number as OTP in the next screen. This simulates the mobile money payment flow in a test environment.",
+          description: "Since this is test mode, enter '123456' as the OTP in the next screen. This is the test OTP that works in Flutterwave's test environment.",
           duration: 10000,
         });
       }
@@ -82,7 +82,7 @@ export default function HomePage() {
       id: 'mobilemoney' as const,
       name: 'Mobile Money',
       icon: Wallet,
-      description: 'Pay using MTN or Airtel Money (Test Mode - Enter any number as OTP)',
+      description: 'Pay using MTN or Airtel Money (Test Mode - Use OTP: 123456)',
       color: 'green-500'
     },
     {
