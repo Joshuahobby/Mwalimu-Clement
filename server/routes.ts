@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import { insertQuestionSchema, packagePrices, examSimulations, examSimulationLogs, insertCustomPackageSchema, customPackages, payments } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { queryClient } from './queryClient'; // Assuming queryClient is imported from somewhere
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -283,62 +284,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/payments", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.sendStatus(401);
+
+      let amount: number;
+      let validUntil = new Date();
+      let packageType = req.body.packageType;
+
+      if (req.body.customPackageId) {
+        // Handle custom package
+        const [customPackage] = await db
+          .select()
+          .from(customPackages)
+          .where(
+            and(
+              eq(customPackages.id, req.body.customPackageId),
+              eq(customPackages.isActive, true)
+            )
+          );
+
+        if (!customPackage) {
+          return res.status(400).json({ message: "Invalid or inactive package" });
+        }
+
+        amount = customPackage.price;
+        validUntil.setHours(validUntil.getHours() + customPackage.duration);
+        packageType = customPackage.name;
+      } else {
+        // Handle default package
+        amount = packagePrices[packageType as keyof typeof packagePrices];
+        if (!amount) return res.status(400).json({ message: "Invalid package type" });
+
+        switch (packageType) {
+          case "single": validUntil.setHours(validUntil.getHours() + 1); break;
+          case "daily": validUntil.setDate(validUntil.getDate() + 1); break;
+          case "weekly": validUntil.setDate(validUntil.getDate() + 7); break;
+          case "monthly": validUntil.setMonth(validUntil.getMonth() + 1); break;
+          default: return res.status(400).json({ message: "Invalid package type" });
+        }
+      }
+
+      const [payment] = await db
+        .insert(payments)
+        .values({
+          userId: req.user.id,
+          amount,
+          packageType,
+          customPackageId: req.body.customPackageId || null,
+          validUntil,
+          createdAt: new Date(),
+          status: "completed",
+          transactionId: `TXN_${Date.now()}`,
+          paymentMethod: "direct",
+          metadata: {
+            customerName: req.user.displayName || req.user.username,
+            email: req.user.email,
+            phone: req.user.phoneNumber,
+          }
+        })
+        .returning();
+
+      queryClient.invalidateQueries({ queryKey: ["/api/payments/active"] });
+      res.json(payment);
+    } catch (error) {
+      console.error('Payment creation error:', error);
+      res.status(500).json({ 
+        message: "Failed to process payment",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Add this route after the existing /api/payments route
+  app.get("/api/payments/active", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
-    let amount: number;
-    let validUntil = new Date();
+    const [activePayment] = await db
+      .select()
+      .from(payments)
+      .where(
+        and(
+          eq(payments.userId, req.user.id),
+          eq(payments.status, "completed"),
+          sql`valid_until > CURRENT_TIMESTAMP`
+        )
+      )
+      .orderBy(desc(payments.createdAt))
+      .limit(1);
 
-    if (req.body.customPackageId) {
-      // Handle custom package
-      const [customPackage] = await db
-        .select()
-        .from(customPackages)
-        .where(
-          and(
-            eq(customPackages.id, req.body.customPackageId),
-            eq(customPackages.isActive, true)
-          )
-        );
-
-      if (!customPackage) {
-        return res.status(400).json({ message: "Invalid or inactive package" });
-      }
-
-      amount = customPackage.price;
-      validUntil.setHours(validUntil.getHours() + customPackage.duration);
-    } else {
-      // Handle default package
-      const { packageType } = req.body;
-      amount = packagePrices[packageType as keyof typeof packagePrices];
-      if (!amount) return res.status(400).json({ message: "Invalid package type" });
-
-      switch (packageType) {
-        case "single": validUntil.setHours(validUntil.getHours() + 1); break;
-        case "daily": validUntil.setDate(validUntil.getDate() + 1); break;
-        case "weekly": validUntil.setDate(validUntil.getDate() + 7); break;
-        case "monthly": validUntil.setMonth(validUntil.getMonth() + 1); break;
-      }
+    if (!activePayment) {
+      return res.status(404).json({ message: "No active payment found" });
     }
 
-    const [payment] = await db
-      .insert(payments)
-      .values({
-        userId: req.user.id,
-        amount,
-        packageType: req.body.packageType,
-        customPackageId: req.body.customPackageId,
-        validUntil,
-        createdAt: new Date(),
-        status: "completed",
-        metadata: {
-          customerName: req.user.displayName || req.user.username,
-          email: req.user.email,
-          phone: req.user.phoneNumber,
-        },
-      })
-      .returning();
-
-    res.json(payment);
+    res.json(activePayment);
   });
 
   // Payment Analytics for Admin
@@ -386,35 +424,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-
-  // Payments
-  //app.post("/api/payments", async (req, res) => { // This route is replaced above.
-  //  if (!req.isAuthenticated()) return res.sendStatus(401);
-  //
-  //  const { packageType } = req.body;
-  //  const amount = packagePrices[packageType as keyof typeof packagePrices];
-  //  if (!amount) return res.status(400).send("Invalid package type");
-  //
-  //  const validUntil = new Date();
-  //  switch (packageType) {
-  //    case "single": validUntil.setHours(validUntil.getHours() + 1); break;
-  //    case "daily": validUntil.setDate(validUntil.getDate() + 1); break;
-  //    case "weekly": validUntil.setDate(validUntil.getDate() + 7); break;
-  //    case "monthly": validUntil.setMonth(validUntil.getMonth() + 1); break;
-  //  }
-  //
-  //  const payment = await storage.createPayment({
-  //    userId: req.user.id,
-  //    amount,
-  //    packageType,
-  //    validUntil,
-  //    createdAt: new Date(),
-  //    status: "completed",
-  //    username: req.user.username,
-  //  });
-  //
-  //  res.json(payment);
-  //});
 
   const httpServer = createServer(app);
   return httpServer;

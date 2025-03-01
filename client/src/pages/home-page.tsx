@@ -21,11 +21,19 @@ export default function HomePage() {
   const paymentMutation = useMutation({
     mutationFn: async (packageType: keyof typeof packagePrices) => {
       const res = await apiRequest("POST", "/api/payments", { packageType });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to process payment");
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/payments/active"] });
       setLocation("/exam");
+      toast({
+        title: "Payment successful",
+        description: "You can now start your exam",
+      });
     },
     onError: (error: Error) => {
       toast({
