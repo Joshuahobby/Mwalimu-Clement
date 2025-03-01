@@ -6,14 +6,11 @@ import { insertQuestionSchema, packagePrices, payments } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { initiatePayment, verifyPayment, verifyWebhookSignature } from "./services/flutterwave";
-import { updateProfileSchema } from "@shared/schema"; // Assuming this schema is defined elsewhere
-import { users } from "@shared/schema"; // Assuming the users schema is defined elsewhere
-
+import { updateProfileSchema } from "@shared/schema"; 
+import { users } from "@shared/schema"; 
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
-
-  // Add these new routes after setupAuth(app)
 
   // Profile Update Route
   app.patch("/api/user/profile", async (req, res) => {
@@ -38,7 +35,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      // Update the session user data
       Object.assign(req.user, updatedUser);
       res.json(updatedUser);
     } catch (error) {
@@ -55,12 +51,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
     try {
-      // Here you would typically:
-      // 1. Handle the file upload (we'll need to add multer middleware)
-      // 2. Process the image
-      // 3. Store it (for now we'll just update the avatarUrl)
-
-      // For demo purposes, we'll just update with a placeholder URL
       const [updatedUser] = await db
         .update(users)
         .set({
@@ -74,7 +64,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      // Update the session user data
       Object.assign(req.user, updatedUser);
       res.json(updatedUser);
     } catch (error) {
@@ -186,7 +175,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "Question not found" });
     }
 
-    // Record the answer
     const isCorrect = req.body.answer === question.correctAnswer;
     await db.insert(examSimulationLogs).values({
       simulationId,
@@ -197,7 +185,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       answer: req.body.answer,
     });
 
-    // Update simulation answers
     const answers = simulation.answers || [];
     answers[simulation.currentQuestionIndex] = req.body.answer;
 
@@ -345,13 +332,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let packageType = req.body.packageType;
       let paymentMethod = req.body.paymentMethod || 'mobilemoney';
 
-      // Get package price
       amount = packagePrices[packageType as keyof typeof packagePrices];
       if (!amount) {
         return res.status(400).json({ message: "Invalid package type" });
       }
 
-      // Calculate validity period
       switch (packageType) {
         case "single": validUntil.setHours(validUntil.getHours() + 1); break;
         case "daily": validUntil.setDate(validUntil.getDate() + 1); break;
@@ -360,7 +345,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         default: return res.status(400).json({ message: "Invalid package type" });
       }
 
-      // Check if user has email
       if (!req.user.email) {
         return res.status(400).json({ 
           message: "Email is required for payment. Please update your profile with a valid email address.",
@@ -368,10 +352,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Generate transaction reference
       const tx_ref = `DRV_${Date.now()}_${req.user.id}`;
 
-      // Create pending payment record
       const [payment] = await db
         .insert(payments)
         .values({
@@ -396,7 +378,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('Created payment record:', payment);
 
-      // Initiate Flutterwave payment
       const paymentResponse = await initiatePayment(
         amount,
         req.user,
@@ -420,10 +401,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log('Payment verification webhook received:', req.body);
 
-      // Get Flutterwave signature from headers
       const signature = req.headers['verif-hash'] || '';
 
-      // Verify signature if in production mode
       if (process.env.NODE_ENV === 'production' && !verifyWebhookSignature(signature as string, req.body)) {
         console.error('Invalid webhook signature');
         return res.status(401).json({ message: "Invalid signature" });
@@ -434,11 +413,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Missing transaction reference" });
       }
 
-      // Verify transaction with Flutterwave API
       const transaction = await verifyPayment(tx_ref);
 
       if (transaction.status === "successful") {
-        // Update payment status
         const [payment] = await db
           .update(payments)
           .set({
@@ -469,7 +446,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         console.error('Payment verification failed. Status:', transaction.status);
 
-        // Update payment record with failed status
         await db
           .update(payments)
           .set({
@@ -512,12 +488,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       try {
-        // Verify transaction with Flutterwave
         const transaction = await verifyPayment(tx_ref as string);
         console.log('Verification response:', JSON.stringify(transaction, null, 2));
 
         if (transaction.status === "successful") {
-          // Update payment status
           const [payment] = await db
             .update(payments)
             .set({
@@ -545,11 +519,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           console.log('Payment completed successfully:', payment);
 
-          // Check if the payment has already expired
           const validUntil = new Date(payment.validUntil);
           if (validUntil < new Date()) {
             console.warn('Payment verified but already expired:', payment.id);
-            // Extend validity by the original duration
             let newValidUntil = new Date();
             switch (payment.packageType) {
               case "single": newValidUntil.setHours(newValidUntil.getHours() + 1); break;
@@ -558,7 +530,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               case "monthly": newValidUntil.setMonth(newValidUntil.getMonth() + 1); break;
             }
 
-            // Update the payment validity
             await db
               .update(payments)
               .set({
@@ -575,7 +546,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`Extended expired payment ${payment.id} validity to ${newValidUntil}`);
           }
 
-          // Redirect to user's dashboard after successful payment
           return res.redirect('/exam');
         } else {
           console.error('Payment verification failed. Status:', transaction.status);
@@ -597,7 +567,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       if (!req.isAuthenticated()) return res.sendStatus(401);
 
-      const payment = await storage.getActivePayment(req.user.id);
+      const [payment] = await db
+        .select()
+        .from(payments)
+        .where(
+          and(
+            eq(payments.userId, req.user.id),
+            eq(payments.status, "completed"),
+            sql`valid_until > NOW()`
+          )
+        )
+        .orderBy(desc(payments.createdAt))
+        .limit(1);
 
       if (!payment) {
         return res.status(404).json({ message: "No active payment found" });
@@ -610,7 +591,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get user's payment history
   app.get("/api/payments/history", async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -628,7 +608,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get status of a specific transaction
   app.get("/api/payments/status", async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -639,7 +618,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Transaction reference is required" });
       }
 
-      // First check if we have this payment in our database
       const [paymentRecord] = await db
         .select()
         .from(payments)
@@ -650,7 +628,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           )
         );
 
-      // If we have a completed payment, return its status
       if (paymentRecord && paymentRecord.status === 'completed') {
         return res.json({
           payment: paymentRecord,
@@ -665,12 +642,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // If not completed or not found, verify with Flutterwave
       const transaction = await verifyPayment(tx_ref as string);
 
-      // If payment is successful but our record doesn't show it, update our record
       if (transaction.status === 'successful' && paymentRecord && paymentRecord.status !== 'completed') {
-        // Update payment record
         await db
           .update(payments)
           .set({
@@ -698,7 +672,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Payment retry endpoint
   app.post("/api/payments/retry", async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -708,7 +681,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Payment ID is required" });
       }
 
-      // Get the failed payment
       const [existingPayment] = await db
         .select()
         .from(payments)
@@ -727,11 +699,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Payment is already completed" });
       }
 
-      // Generate new transaction reference
       const tx_ref = `DRV_RETRY_${Date.now()}_${req.user.id}`;
       const paymentMethod = req.body.paymentMethod || existingPayment.metadata?.payment_method || 'mobilemoney';
 
-      // Update the existing payment record with new tx_ref
       await db
         .update(payments)
         .set({
@@ -746,7 +716,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .where(eq(payments.id, existingPayment.id));
 
-      // Initiate Flutterwave payment
       const paymentResponse = await initiatePayment(
         existingPayment.amount,
         req.user,
@@ -765,7 +734,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Payment Analytics for Admin
   app.get("/api/admin/analytics/payments", async (req, res) => {
     if (!req.isAuthenticated() || !req.user.isAdmin) return res.sendStatus(403);
 
@@ -810,7 +778,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Admin refund endpoint
   app.post("/api/admin/payments/:id/refund", async (req, res) => {
     try {
       if (!req.isAuthenticated() || !req.user.isAdmin) return res.sendStatus(403);
@@ -818,7 +785,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const paymentId = parseInt(req.params.id);
       const { reason } = req.body;
 
-      // Get the payment
       const [payment] = await db
         .select()
         .from(payments)
@@ -832,7 +798,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Only completed payments can be refunded" });
       }
 
-      // Update payment status to refunded
       const [refundedPayment] = await db
         .update(payments)
         .set({
@@ -847,10 +812,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(payments.id, paymentId))
         .returning();
 
-      // Here you would typically call Flutterwave's refund API
-      // This would depend on your specific Flutterwave integration
 
-      // For now, we just mark as refunded in our database
       console.log('Payment refunded:', refundedPayment);
 
       res.json({
