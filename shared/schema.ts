@@ -76,7 +76,6 @@ export const payments = pgTable("payments", {
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   amount: integer("amount").notNull(),
   packageType: text("package_type").notNull(),
-  customPackageId: integer("custom_package_id").references(() => customPackages.id),
   validUntil: timestamp("valid_until").notNull(),
   createdAt: timestamp("created_at").notNull(),
   status: text("status", { enum: paymentStatuses }).default("pending").notNull(),
@@ -86,6 +85,8 @@ export const payments = pgTable("payments", {
     customerName?: string;
     email?: string;
     phone?: string;
+    flutterwave_tx_ref?: string;
+    flutterwave_tx_id?: string;
     notes?: string;
   }>(),
   refundReason: text("refund_reason"),
@@ -186,7 +187,6 @@ export const customPackages = pgTable("custom_packages", {
     activeIdx: index("custom_package_active_idx").on(table.isActive),
   };
 });
-
 
 export const insertCustomPackageSchema = createInsertSchema(customPackages).omit({
   id: true,

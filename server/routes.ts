@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import { insertQuestionSchema, packagePrices } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { initiatePayment, verifyPayment } from "./services/flutterwave";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -258,7 +259,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(updatedPackage);
   });
 
-  // Simplified Payment Routes
+  // Payment Routes
   app.post("/api/payments", async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -282,24 +283,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
         default: return res.status(400).json({ message: "Invalid package type" });
       }
 
-      // Create payment record
+      // Create pending payment record
       const payment = await storage.createPayment({
         userId: req.user.id,
         amount,
         packageType,
         validUntil,
         createdAt: new Date(),
-        status: "completed",
+        status: "pending",
         username: req.user.username
       });
 
-      res.json(payment);
+      // Initiate Flutterwave payment
+      const paymentResponse = await initiatePayment(
+        amount,
+        req.user,
+        packageType,
+        `${req.protocol}://${req.get('host')}/api/payments/verify`
+      );
+
+      res.json(paymentResponse);
     } catch (error) {
       console.error('Payment creation error:', error);
       res.status(500).json({ 
         message: "Failed to process payment",
         error: error instanceof Error ? error.message : "Unknown error"
       });
+    }
+  });
+
+  // Payment verification webhook
+  app.post("/api/payments/verify", async (req, res) => {
+    try {
+      const transactionId = req.body.transaction_id;
+      const transaction = await verifyPayment(transactionId);
+
+      if (transaction.status === "successful") {
+        // Update payment status
+        const [payment] = await db
+          .update(payments)
+          .set({
+            status: "completed",
+            metadata: {
+              ...req.body,
+              flutterwave_tx_id: transactionId
+            }
+          })
+          .where(eq(payments.metadata.flutterwave_tx_ref, transaction.tx_ref))
+          .returning();
+
+        if (!payment) {
+          return res.status(404).json({ message: "Payment not found" });
+        }
+
+        res.json({ status: "success", payment });
+      } else {
+        res.status(400).json({ message: "Payment verification failed" });
+      }
+    } catch (error) {
+      console.error('Payment verification error:', error);
+      res.status(500).json({ message: "Failed to verify payment" });
     }
   });
 

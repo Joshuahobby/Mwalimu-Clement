@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Payment, packagePrices } from "@shared/schema";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -25,15 +25,12 @@ export default function HomePage() {
         const error = await res.json();
         throw new Error(error.message || "Failed to process payment");
       }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/payments/active"] });
-      toast({
-        title: "Payment successful",
-        description: "You can now start your exam",
-      });
-      setLocation("/exam");
+      const data = await res.json();
+      // Redirect to Flutterwave payment page
+      if (data.status === 'success' && data.data.link) {
+        window.location.href = data.data.link;
+      }
+      return data;
     },
     onError: (error: Error) => {
       toast({
