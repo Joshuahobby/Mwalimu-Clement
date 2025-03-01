@@ -267,6 +267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let amount: number;
       let validUntil = new Date();
       let packageType = req.body.packageType;
+      let paymentMethod = req.body.paymentMethod || 'mobilemoney';
 
       // Get package price
       amount = packagePrices[packageType as keyof typeof packagePrices];
@@ -299,7 +300,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amount,
         req.user,
         packageType,
-        `${req.protocol}://${req.get('host')}/api/payments/verify`
+        `${req.protocol}://${req.get('host')}/api/payments/verify`,
+        paymentMethod
       );
 
       res.json(paymentResponse);

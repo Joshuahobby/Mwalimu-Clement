@@ -26,6 +26,7 @@ export default function HomePage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [selectedPackage, setSelectedPackage] = useState<keyof typeof packagePrices | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const { data: activePayment, isLoading: paymentLoading } = useQuery<Payment>({
     queryKey: ["/api/payments/active"],
@@ -33,7 +34,11 @@ export default function HomePage() {
   });
 
   const handlePayment = async (packageType: keyof typeof packagePrices, paymentMethod: PaymentMethod) => {
+    if (isProcessing) return;
+
     try {
+      setIsProcessing(true);
+
       const response = await apiRequest("POST", "/api/payments", { 
         packageType,
         paymentMethod 
@@ -45,6 +50,7 @@ export default function HomePage() {
       }
 
       const data: PaymentResponse = await response.json();
+
       if (data.status === 'success' && data.data.link) {
         // Redirect to Flutterwave payment page
         window.location.href = data.data.link;
@@ -57,6 +63,8 @@ export default function HomePage() {
         description: error instanceof Error ? error.message : "Failed to process payment",
         variant: "destructive",
       });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -140,24 +148,6 @@ export default function HomePage() {
                 <Button onClick={() => setLocation("/exam")}>Start New Exam</Button>
               </CardFooter>
             </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Practice Mode</CardTitle>
-                <CardDescription>
-                  Try our interactive exam simulation mode
-                </CardDescription>
-              </CardHeader>
-              <CardFooter>
-                <Button
-                  variant="secondary"
-                  onClick={() => setLocation("/exam-simulation")}
-                  className="flex items-center gap-2"
-                >
-                  <BookOpen className="h-4 w-4" />
-                  Start Practice Mode
-                </Button>
-              </CardFooter>
-            </Card>
           </div>
         ) : (
           <div className="text-center mb-8">
@@ -185,8 +175,9 @@ export default function HomePage() {
                     <Button 
                       className="w-full"
                       onClick={() => setSelectedPackage(pkg.type)}
+                      disabled={isProcessing}
                     >
-                      Purchase
+                      {isProcessing ? "Processing..." : "Purchase"}
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
@@ -200,6 +191,7 @@ export default function HomePage() {
                           variant="outline"
                           className="w-full flex items-center gap-2 justify-start p-4"
                           onClick={() => handlePayment(pkg.type, method.id)}
+                          disabled={isProcessing}
                         >
                           <method.icon className="h-5 w-5" />
                           <div className="text-left">
