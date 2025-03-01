@@ -82,6 +82,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type AnalyticsData = {
   examCompletions: {
@@ -132,6 +133,7 @@ type PricingPackage = {
   price: number;
   isEnabled: boolean;
 };
+type UserRole = "admin" | "instructor" | "student";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -156,10 +158,11 @@ export default function AdminPage() {
   const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
   const [isDeactivateOpen, setIsDeactivateOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
-  const [dateRange, setDateRange] = useState<{start: Date; end: Date}>({
+  const [dateRange, setDateRange] = useState<{ start: Date; end: Date }>({
     start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
     end: new Date()
   });
+  const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
 
   if (!user) {
     return null;
@@ -400,6 +403,51 @@ export default function AdminPage() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+
+  // Add bulk action mutation
+  const bulkActionMutation = useMutation({
+    mutationFn: async ({ userIds, action }: { userIds: number[]; action: string }) => {
+      const res = await apiRequest("POST", "/api/users/bulk-action", { userIds, action });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setSelectedUsers([]);
+      toast({
+        title: "Success",
+        description: "Bulk action completed successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Add role update mutation
+  const updateRoleMutation = useMutation({
+    mutationFn: async ({ userId, role }: { userId: number; role: UserRole }) => {
+      const res = await apiRequest("PATCH", `/api/users/${userId}/role`, { role });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "Success",
+        description: "User role updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   return (
     <SidebarProvider>
@@ -680,100 +728,195 @@ export default function AdminPage() {
 
           {activeSection === "users" && (
             <div className="space-y-6">
-              <div className="flex items-center gap-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Search users..."
-                    value={userSearchTerm}
-                    onChange={(e) => setUserSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4 flex-1">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Search users..."
+                      value={userSearchTerm}
+                      onChange={(e) => setUserSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  {selectedUsers.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline">
+                          Bulk Actions ({selectedUsers.length})
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        <DropdownMenuItem
+                          onClick={() => bulkActionMutation.mutate({
+                            userIds: selectedUsers,
+                            action: "deactivate"
+                          })}
+                        >
+                          Deactivate Selected
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => bulkActionMutation.mutate({
+                            userIds: selectedUsers,
+                            action: "activate"
+                          })}
+                        >
+                          Activate Selected
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </div>
               </div>
 
               <Card>
                 <CardHeader>
                   <CardTitle>User Management</CardTitle>
+                  <CardDescription>Manage user accounts and permissions</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {paginatedUsers.map((user) => (
-                      <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <p className="font-medium">{user.username}</p>
-                          <p className="text-sm text-muted-foreground">
-                            Role: {user.isAdmin ? "Admin" : "User"}
-                          </p>
-                          {userStats?.[user.id] && (
-                            <div className="mt-2 space-y-1">
-                              <p className="text-sm">
-                                Exam Attempts: {userStats[user.id].examAttempts}
-                              </p>
-                              <p className="text-sm">
-                                Success Rate: {userStats[user.id].successRate}%
-                              </p>
-                              <p className="text-sm">
-                                Last Active: {new Date(userStats[user.id].lastActive).toLocaleDateString()}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                        <div className="space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedUser(user);
-                              setIsResetPasswordOpen(true);
-                            }}
-                          >
-                            Reset Password
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedUser(user);
-                              setIsDeactivateOpen(true);
-                            }}
-                          >
-                            Deactivate
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {totalUserPages > 1 && (
-                    <div className="flex justify-center gap-2 mt-4">
-                      <Button
-                        variant="outline"
-                        onClick={() => setUserCurrentPage(p => Math.max(1, p - 1))}
-                        disabled={userCurrentPage === 1}
-                      >
-                        Previous
-                      </Button>
-                      <div className="flex items-center gap-2">
-                        {Array.from({ length: totalUserPages }, (_, i) => i + 1).map((page) => (
-                          <Button
-                            key={page}
-                            variant={userCurrentPage === page ? "default" : "outline"}
-                            onClick={() => setUserCurrentPage(page)}
-                          >
-                            {page}
-                          </Button>
-                        ))}
-                      </div>
-                      <Button
-                        variant="outline"
-                        onClick={() => setUserCurrentPage(p => Math.min(totalUserPages, p + 1))}
-                        disabled={userCurrentPage === totalUserPages}
-                      >
-                        Next
-                      </Button>
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[50px]">
+                              <Checkbox
+                                checked={selectedUsers.length === paginatedUsers.length}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setSelectedUsers(paginatedUsers.map(u => u.id));
+                                  } else {
+                                    setSelectedUsers([]);
+                                  }
+                                }}
+                              />
+                            </TableHead>
+                            <TableHead>Username</TableHead>
+                            <TableHead>Role</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Statistics</TableHead>
+                            <TableHead>Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {paginatedUsers.map((user) => (
+                            <TableRow key={user.id}>
+                              <TableCell>
+                                <Checkbox
+                                  checked={selectedUsers.includes(user.id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setSelectedUsers([...selectedUsers, user.id]);
+                                    } else {
+                                      setSelectedUsers(selectedUsers.filter(id => id !== user.id));
+                                    }
+                                  }}
+                                />
+                              </TableCell>
+                              <TableCell>{user.username}</TableCell>
+                              <TableCell>
+                                <Select
+                                  value={user.role || "student"}
+                                  onValueChange={(value: UserRole) => {
+                                    updateRoleMutation.mutate({
+                                      userId: user.id,
+                                      role: value,
+                                    });
+                                  }}
+                                >
+                                  <SelectTrigger className="w-[130px]">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="student">Student</SelectItem>
+                                    <SelectItem value="instructor">Instructor</SelectItem>
+                                    <SelectItem value="admin">Admin</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={user.isActive ? "default" : "secondary"}
+                                >
+                                  {user.isActive ? "Active" : "Inactive"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {userStats?.[user.id] && (
+                                  <div className="space-y-1">
+                                    <p className="text-sm">
+                                      Exam Attempts: {userStats[user.id].examAttempts}
+                                    </p>
+                                    <p className="text-sm">
+                                      Success Rate: {userStats[user.id].successRate}%
+                                    </p>
+                                    <p className="text-sm">
+                                      Last Active: {new Date(userStats[user.id].lastActive).toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedUser(user);
+                                      setIsResetPasswordOpen(true);
+                                    }}
+                                  >
+                                    Reset Password
+                                  </Button>
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedUser(user);
+                                      setIsDeactivateOpen(true);
+                                    }}
+                                  >
+                                    Deactivate
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
-                  )}
+
+                    {totalUserPages > 1 && (
+                      <div className="flex justify-center gap-2 mt-4">
+                        <Button
+                          variant="outline"
+                          onClick={() => setUserCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={userCurrentPage === 1}
+                        >
+                          Previous
+                        </Button>
+                        <div className="flex items-center gap-2">
+                          {Array.from({ length: totalUserPages }, (_, i) => i + 1).map((page) => (
+                            <Button
+                              key={page}
+                              variant={userCurrentPage === page ? "default" : "outline"}
+                              onClick={() => setUserCurrentPage(page)}
+                            >
+                              {page}
+                            </Button>
+                          ))}
+                        </div>
+                        <Button
+                          variant="outline"
+                          onClick={() => setUserCurrentPage(p => Math.min(totalUserPages, p + 1))}
+                          disabled={userCurrentPage === totalUserPages}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -1020,7 +1163,8 @@ export default function AdminPage() {
                 </CardHeader>
                 <CardContent>
                   <Table>
-                    <TableCaption>List of all payments</TableCaption>                    <TableHeader>
+                    <TableCaption>List of all payments</TableCaption>
+                    <TableHeader>
                       <TableRow>
                         <TableHead>ID</TableHead>
                         <TableHead>User</TableHead>
