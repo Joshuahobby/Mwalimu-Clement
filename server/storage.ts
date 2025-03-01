@@ -75,6 +75,14 @@ export class MemStorage implements IStorage {
         username: "admin",
         password: adminPassword,
         isAdmin: true,
+        role: "admin",
+        isActive: true,
+        theme: "system",
+        preferences: {
+          emailNotifications: true,
+          smsNotifications: false,
+          language: "en"
+        }
       };
       this.users.set(admin.id, admin);
       log("Default admin user created");
@@ -94,8 +102,29 @@ export class MemStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
+    const existingUser = await this.getUserByUsername(insertUser.username);
+    if (existingUser) {
+      throw new Error("Username already exists");
+    }
+
     const id = this.currentId++;
-    const user: User = { ...insertUser, id, isAdmin: false };
+    const hashedPassword = await hashPassword(insertUser.password);
+
+    const user: User = {
+      id,
+      username: insertUser.username,
+      password: hashedPassword,
+      isAdmin: insertUser.role === "admin",
+      role: insertUser.role,
+      isActive: true,
+      theme: "system",
+      preferences: {
+        emailNotifications: true,
+        smsNotifications: false,
+        language: "en"
+      }
+    };
+
     this.users.set(id, user);
     log(`New user created: ${user.username}`);
     return user;
