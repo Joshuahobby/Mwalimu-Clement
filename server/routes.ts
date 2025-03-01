@@ -311,6 +311,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('Created payment record:', payment);
 
+      // Make sure we have an email for the user
+      if (!req.user.email) {
+        console.log('User has no email, using generated one for payment');
+      }
+      
       // Initiate Flutterwave payment
       const paymentResponse = await initiatePayment(
         amount,

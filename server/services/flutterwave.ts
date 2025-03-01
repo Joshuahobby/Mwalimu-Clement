@@ -1,4 +1,3 @@
-
 import axios from "axios";
 
 const FLUTTERWAVE_SECRET_KEY = process.env.FLUTTERWAVE_SECRET_KEY || "FLWSECK_TEST-2f49267e1f25852a5a1f2d94f87fa83f-X";
@@ -37,11 +36,11 @@ const validateFlutterwaveResponse = (response: any): FlutterwaveResponse => {
   if (!response || typeof response !== 'object') {
     throw new Error("Invalid response from payment gateway");
   }
-  
+
   if (!response.status) {
     throw new Error("Missing status in payment gateway response");
   }
-  
+
   return response;
 };
 
@@ -54,8 +53,13 @@ export async function initiatePayment(
   paymentMethod: string = 'mobilemoney'
 ): Promise<any> {
   try {
+    //Ensure customer email exists before proceeding
+    if (!user.email) {
+      throw new Error("Customer email is required to initiate payment.");
+    }
+
     console.log(`Initiating ${paymentMethod} payment for ${user.email} (${packageType}) - ${amount} RWF`);
-    
+
     // Flutterwave API expects a full name, so default to username if not provided
     const customerName = user.firstName && user.lastName 
       ? `${user.firstName} ${user.lastName}` 
@@ -63,7 +67,7 @@ export async function initiatePayment(
 
     // Generate transaction reference
     const tx_ref = `DRV_${Date.now()}_${user.id}`;
-    
+
     // Create payment payload
     const payload: Record<string, any> = {
       tx_ref,
@@ -85,7 +89,7 @@ export async function initiatePayment(
         user_id: user.id
       }
     };
-    
+
     // Add payment method specific configuration
     if (paymentMethod === 'mobilemoney') {
       payload.payment_options = "mobilemoneyrwanda";
@@ -96,9 +100,9 @@ export async function initiatePayment(
     } else if (paymentMethod === 'banktransfer') {
       payload.payment_options = "banktransfer";
     }
-    
+
     console.log('Payment payload:', JSON.stringify(payload, null, 2));
-    
+
     // Make API request to Flutterwave
     const response = await axios.post(`${BASE_URL}/payments`, payload, {
       headers: {
@@ -106,15 +110,15 @@ export async function initiatePayment(
         "Content-Type": "application/json"
       }
     });
-    
+
     const result = validateFlutterwaveResponse(response.data);
     console.log('Flutterwave response:', JSON.stringify(result, null, 2));
-    
+
     if (result.status !== "success") {
       console.error('Flutterwave payment initiation failed:', result.message);
       throw new Error(`Payment initiation failed: ${result.message}`);
     }
-    
+
     return {
       status: result.status,
       message: result.message,
@@ -139,7 +143,7 @@ export async function initiatePayment(
 export async function verifyPayment(tx_ref: string): Promise<VerificationResponse> {
   try {
     console.log(`Verifying payment with reference: ${tx_ref}`);
-    
+
     // Make API request to Flutterwave
     const response = await axios.get(`${BASE_URL}/transactions/verify_by_reference?tx_ref=${tx_ref}`, {
       headers: {
@@ -147,10 +151,10 @@ export async function verifyPayment(tx_ref: string): Promise<VerificationRespons
         "Content-Type": "application/json"
       }
     });
-    
+
     const result = validateFlutterwaveResponse(response.data);
     console.log('Verification response:', JSON.stringify(result, null, 2));
-    
+
     if (result.status !== "success") {
       console.error('Flutterwave verification failed:', result.message);
       return {
@@ -158,7 +162,7 @@ export async function verifyPayment(tx_ref: string): Promise<VerificationRespons
         message: result.message || "Verification failed"
       };
     }
-    
+
     // Extract transaction data
     const transaction = result.data;
     if (!transaction) {
@@ -168,7 +172,7 @@ export async function verifyPayment(tx_ref: string): Promise<VerificationRespons
         message: "Transaction data missing"
       };
     }
-    
+
     // Check if transaction was successful
     if (transaction.status !== "successful") {
       console.error(`Transaction found but status is ${transaction.status}`);
@@ -181,7 +185,7 @@ export async function verifyPayment(tx_ref: string): Promise<VerificationRespons
         createdAt: transaction.created_at
       };
     }
-    
+
     // Successful transaction
     return {
       status: "successful",
@@ -199,14 +203,14 @@ export async function verifyPayment(tx_ref: string): Promise<VerificationRespons
     console.error('Payment verification error:', error);
     if (axios.isAxiosError(error)) {
       console.error('API Error:', error.response?.data || error.message);
-      
+
       if (error.response?.status === 404) {
         return {
           status: "not_found",
           message: "Transaction reference not found"
         };
       }
-      
+
       throw new Error(`Verification error: ${error.response?.data?.message || error.message}`);
     }
     throw error;
@@ -219,25 +223,25 @@ export function verifyWebhookSignature(signature: string, payload: any): boolean
   // This is a placeholder - in production you would compare the
   // provided signature with a hash of the payload using your secret key
   if (!signature) return false;
-  
+
   // For testing environments, we can bypass this check
   if (process.env.NODE_ENV !== 'production') {
     console.log('Bypassing webhook signature verification in non-production environment');
     return true;
   }
-  
+
   // In production, you should implement proper signature verification
   // Example for Flutterwave:
   // 1. Get the secret hash from your environment variables
   const secretHash = process.env.FLUTTERWAVE_WEBHOOK_SECRET;
-  
+
   // 2. Compare with the signature from the request
   const isValid = signature === secretHash;
-  
+
   if (!isValid) {
     console.error('Invalid webhook signature received:', signature);
   }
-  
+
   return isValid;
 }
 
@@ -248,11 +252,11 @@ function computeSignatureHash(payload: any, secret: string): string {
     // This is a placeholder. In production, you would:
     // 1. Convert payload to string if it's an object
     const payloadString = typeof payload === 'object' ? JSON.stringify(payload) : String(payload);
-    
+
     // 2. In Node.js, you would use the crypto module to create a hash
     // const crypto = require('crypto');
     // return crypto.createHmac('sha256', secret).update(payloadString).digest('hex');
-    
+
     // Simplified placeholder for the example
     return secret;
   } catch (error) {
@@ -270,7 +274,7 @@ export async function getTransactionDetails(id: string): Promise<any> {
         "Content-Type": "application/json"
       }
     });
-    
+
     return validateFlutterwaveResponse(response.data);
   } catch (error) {
     console.error(`Error getting transaction details for ID ${id}:`, error);
@@ -282,18 +286,18 @@ export async function getTransactionDetails(id: string): Promise<any> {
 export async function refundTransaction(id: string, amount?: number): Promise<any> {
   try {
     const payload: Record<string, any> = { id };
-    
+
     if (amount) {
       payload.amount = amount;
     }
-    
+
     const response = await axios.post(`${BASE_URL}/transactions/${id}/refund`, payload, {
       headers: {
         Authorization: `Bearer ${FLUTTERWAVE_SECRET_KEY}`,
         "Content-Type": "application/json"
       }
     });
-    
+
     return validateFlutterwaveResponse(response.data);
   } catch (error) {
     console.error(`Error refunding transaction ${id}:`, error);
