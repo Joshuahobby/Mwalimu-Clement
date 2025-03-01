@@ -75,10 +75,12 @@ export const settings = pgTable("settings", {
   value: json("value").notNull(),
 });
 
-// Update the insertUserSchema to include new profile fields
+// Update the insertUserSchema to include role
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
+}).extend({
+  role: z.enum(userRoles).default("student"),
 });
 
 export const updateProfileSchema = createInsertSchema(users).pick({
