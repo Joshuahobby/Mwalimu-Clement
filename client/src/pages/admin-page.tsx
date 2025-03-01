@@ -280,7 +280,14 @@ export default function AdminPage() {
   const updatePricingMutation = useMutation({
     mutationFn: async (data: { type: string; price: number; isEnabled: boolean }) => {
       const res = await apiRequest("PATCH", "/api/pricing", data);
-      return res.json();
+      if (!res.ok) {
+        throw new Error(`Failed to update pricing: ${res.statusText}`);
+      }
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        return res.json();
+      }
+      throw new Error("Invalid response from server");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/pricing"] });
@@ -1046,11 +1053,15 @@ export default function AdminPage() {
                             <Switch
                               defaultChecked={true}
                               onCheckedChange={(isEnabled) => {
-                                updatePricingMutation.mutate({
-                                  type: pkg.type,
-                                  price: packagePrices[pkg.type as keyof typeof packagePrices],
-                                  isEnabled,
-                                });
+                                try {
+                                  updatePricingMutation.mutate({
+                                    type: pkg.type,
+                                    price: packagePrices[pkg.type as keyof typeof packagePrices],
+                                    isEnabled,
+                                  });
+                                } catch (error) {
+                                  console.error("Error updating pricing:", error);
+                                }
                               }}
                             />
                           </TableCell>
