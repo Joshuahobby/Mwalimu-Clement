@@ -185,12 +185,12 @@ export default function PaymentSuccessPage() {
             </div>
 
             {/* Next Steps Section */}
-            <div className="bg-blue-50 rounded-lg p-6">
-              <h3 className="font-semibold mb-2">{nextStep.title}</h3>
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-100">
+              <h3 className="font-semibold mb-2 text-blue-800">{nextStep.title}</h3>
               <p className="text-sm text-gray-600 mb-4">{nextStep.description}</p>
               <Button 
                 onClick={() => setLocation(nextStep.route)}
-                className="w-full md:w-auto"
+                className="w-full md:w-auto primary-button"
               >
                 {nextStep.action} <ArrowRight className="w-4 h-4 ml-2" />
               </Button>

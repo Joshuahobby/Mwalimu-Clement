@@ -153,11 +153,11 @@ export default function PaymentHistoryPage() {
               payments
                 .filter(payment => tab === 'all' || payment.status === tab)
                 .map(payment => (
-                  <Card key={payment.id} className="overflow-hidden">
-                    <CardHeader>
+                  <Card key={payment.id} className="overflow-hidden payment-card">
+                    <CardHeader className="payment-header">
                       <div className="flex justify-between items-start">
                         <div>
-                          <CardTitle className="capitalize">
+                          <CardTitle className="capitalize text-primary">
                             {payment.packageType} Package
                           </CardTitle>
                           <CardDescription>
@@ -167,7 +167,15 @@ export default function PaymentHistoryPage() {
                         {getStatusBadge(payment.status)}
                       </div>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-500">Amount</span>
+                        <span className="payment-amount">{payment.amount} RWF</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-500">Valid Until</span>
+                        <span className="font-medium">{payment.validUntil ? formatDate(payment.validUntil) : "N/A"}</span>
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <p className="text-sm font-medium text-gray-500">Amount:</p>

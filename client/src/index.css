@@ -7,6 +7,127 @@
     @apply border-border;
   }
 
+
+/* Enhanced Payment Section Styles */
+.payment-card {
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.payment-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+.payment-header {
+  background: linear-gradient(135deg, #f9fafb 0%, #eef2ff 100%);
+  border-radius: 12px 12px 0 0;
+}
+
+.payment-success-badge {
+  background: linear-gradient(135deg, #dcfce7 0%, #86efac 100%);
+  color: #166534;
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 9999px;
+}
+
+.payment-pending-badge {
+  background: linear-gradient(135deg, #fef9c3 0%, #fde047 100%);
+  color: #854d0e;
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 9999px;
+}
+
+.payment-failed-badge {
+  background: linear-gradient(135deg, #fee2e2 0%, #fca5a5 100%);
+  color: #b91c1c;
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 9999px;
+}
+
+.payment-amount {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.payment-footer {
+  background-color: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+  border-radius: 0 0 12px 12px;
+}
+
+/* Button improvements */
+.primary-button {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 4px 6px rgba(37, 99, 235, 0.25);
+  transition: all 0.2s ease;
+}
+
+.primary-button:hover {
+  box-shadow: 0 6px 12px rgba(37, 99, 235, 0.35);
+  transform: translateY(-1px);
+}
+
+/* Improved admin table */
+.admin-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+
+.admin-table th {
+  background-color: #f9fafb;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  padding: 12px 16px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.admin-table td {
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  transition: background-color 0.1s ease;
+}
+
+.admin-table tr:hover td {
+  background-color: #f3f4f6;
+}
+
+.admin-table-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Better form elements */
+.custom-input {
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  padding: 10px 16px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  width: 100%;
+}
+
+.custom-input:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+  outline: none;
+}
+
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }

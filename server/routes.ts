@@ -529,6 +529,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     amount: transaction.amountPaid || 200,
                     packageType,
                     validUntil,
+                    createdAt: new Date(), // Add explicit createdAt
                     status: "completed",
                     username: req.user.username,
                     metadata: {
@@ -795,27 +796,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const transaction = await verifyPayment(tx_ref as string);
+      try {
+        const transaction = await verifyPayment(tx_ref as string);
 
-      if (transaction.status === 'successful' && paymentRecord && paymentRecord.status !== 'completed') {
-        await db
-          .update(payments)
-          .set({
-            status: 'completed',
-            metadata: {
-              ...paymentRecord.metadata,
-              transaction_id: transaction.transactionId,
-              verified_at: new Date().toISOString(),
-              verification_method: 'manual_check'
-            }
-          })
-          .where(eq(payments.id, paymentRecord.id));
+        if (transaction.status === 'successful' && paymentRecord && paymentRecord.status !== 'completed') {
+          await db
+            .update(payments)
+            .set({
+              status: 'completed',
+              metadata: {
+                ...paymentRecord.metadata,
+                transaction_id: transaction.transactionId,
+                verified_at: new Date().toISOString(),
+                verification_method: 'manual_check'
+              }
+            })
+            .where(eq(payments.id, paymentRecord.id));
+        }
+
+        res.json({
+          payment: paymentRecord || null,
+          transaction
+        });
+      } catch (verifyError) {
+        console.error('Verification error for tx_ref:', tx_ref, verifyError);
+        
+        // Return a more graceful response instead of letting the error propagate
+        res.json({
+          payment: paymentRecord || null,
+          transaction: {
+            status: 'unknown',
+            message: 'Could not verify transaction status',
+            error: verifyError instanceof Error ? verifyError.message : 'Unknown error'
+          }
+        });
       }
-
-      res.json({
-        payment: paymentRecord || null,
-        transaction
-      });
     } catch (error) {
       console.error('Error checking transaction status:', error);
       res.status(500).json({

@@ -1380,30 +1380,53 @@ export default function AdminPage() {
                   <CardTitle>Payment Management</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <Table>
-                    <TableCaption>List of all payments</TableCaption>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>ID</TableHead>
-                        <TableHead>User</TableHead>
-                        <TableHead>Package</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {payments?.map((payment) => (
-                        <TableRow key={payment.id}>
-                          <TableCell>{payment.id}</TableCell>
-                          <TableCell>{payment.username}</TableCell>
-                          <TableCell>{payment.packageType}</TableCell>
-                          <TableCell>{payment.amount} RWF</TableCell>
-                          <TableCell>{format(new Date(payment.createdAt), 'PPP')}</TableCell>
-                          <TableCell>
-                            <Select
-                              value={payment.status}
+                  <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+                    <div className="p-4 flex justify-between items-center border-b border-gray-100">
+                      <h3 className="font-medium text-gray-700">List of all payments</h3>
+                      <div className="flex space-x-2">
+                        <select className="custom-input max-w-[180px] h-9 text-sm" defaultValue="all">
+                          <option value="all">All Statuses</option>
+                          <option value="completed">Completed</option>
+                          <option value="pending">Pending</option>
+                          <option value="failed">Failed</option>
+                          <option value="refunded">Refunded</option>
+                        </select>
+                      </div>
+                    </div>
+                    <Table className="admin-table">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-16">ID</TableHead>
+                          <TableHead>User</TableHead>
+                          <TableHead>Package</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {payments?.map((payment) => (
+                          <TableRow key={payment.id}>
+                            <TableCell className="font-mono text-xs">{payment.id}</TableCell>
+                            <TableCell className="font-medium">{payment.username}</TableCell>
+                            <TableCell>
+                              <span className="capitalize">{payment.packageType}</span>
+                            </TableCell>
+                            <TableCell className="font-medium">{payment.amount} RWF</TableCell>
+                            <TableCell>{format(new Date(payment.createdAt), 'PPP')}</TableCell>
+                            <TableCell>
+                              <div className={`inline-flex px-2 py-1 rounded-full text-xs font-medium 
+                                ${payment.status === 'completed' ? 'bg-green-100 text-green-800' : 
+                                  payment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
+                                  payment.status === 'failed' ? 'bg-red-100 text-red-800' :
+                                  'bg-gray-100 text-gray-800'}`}>
+                                {payment.status}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Select
+                                value={payment.status}
                               onValueChange={(status: PaymentStatus) =>
                                 updatePaymentStatusMutation.mutate({
                                   paymentId: payment.id,
