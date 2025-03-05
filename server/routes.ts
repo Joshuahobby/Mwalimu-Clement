@@ -495,7 +495,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('Verification response:', JSON.stringify(transaction, null, 2));
 
         if (transaction.status === "successful") {
+          console.log('Transaction verified successfully:', {
+            tx_ref,
+            transaction_id,
+            status: transaction.status
+          });
+
+          // First find the pending payment
+          const [pendingPayment] = await db
+            .select()
+            .from(payments)
+            .where(
+              and(
+                eq(payments.status, "pending"),
+                sql`payments.metadata->>'tx_ref' = ${tx_ref}`
+              )
+            );
+
+          if (!pendingPayment) {
+            console.error('No pending payment found for tx_ref:', tx_ref);
+            return res.redirect('/?error=payment_not_found&tx_ref=' + encodeURIComponent(tx_ref as string));
+          }
+
+          console.log('Found pending payment:', pendingPayment);
+
           const metadata = {
+            ...pendingPayment.metadata,
             tx_ref,
             transaction_id,
             status: transaction.status,
@@ -513,21 +538,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
               status: "completed",
               metadata
             })
-            .where(
-              and(
-                eq(payments.status, "pending"),
-                sql`payments.metadata->>'tx_ref' = ${tx_ref}`
-              )
-            )
+            .where(eq(payments.id, pendingPayment.id))
             .returning();
 
           if (!payment) {
-            console.error('Payment not found for tx_ref:', tx_ref);
-            return res.redirect('/?error=payment_not_found&tx_ref=' + encodeURIComponent(tx_ref as string));
+            console.error('Failed to update payment record:', pendingPayment.id);
+            return res.redirect('/?error=update_failed');
           }
 
-          console.log('Payment completed successfully:', payment);
+          console.log('Payment completed successfully:', {
+            id: payment.id,
+            status: payment.status,
+            metadata: payment.metadata
+          });
 
+          // Check if payment has expired
           const validUntil = new Date(payment.validUntil);
           if (validUntil < new Date()) {
             console.warn('Payment verified but already expired:', payment.id);
