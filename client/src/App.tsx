@@ -12,6 +12,7 @@ import ProfilePage from "@/pages/profile-page";
 import PaymentSuccessPage from "@/pages/payment-success";
 import ExamSimulationPage from "@/pages/exam-simulation-page";
 import { ProtectedRoute } from "./lib/protected-route";
+import ProgressDashboard from "./pages/progress-dashboard"; // Added import
 
 function Router() {
   return (
@@ -19,6 +20,7 @@ function Router() {
       <ProtectedRoute path="/" component={HomePage} />
       <ProtectedRoute path="/exam" component={ExamPage} />
       <ProtectedRoute path="/exam-simulation" component={ExamSimulationPage} />
+      <ProtectedRoute path="/progress" component={ProgressDashboard} /> {/* Added ProgressDashboard route */}
       <ProtectedRoute path="/admin" component={AdminPage} adminOnly />
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/payment/success" component={PaymentSuccessPage} />

@@ -761,6 +761,130 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch payment history" });
     }
   });
+  
+  // User Progress API endpoint
+  app.get("/api/user/progress", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      // Get the active payment to access journey data
+      const [activePayment] = await db
+        .select()
+        .from(payments)
+        .where(
+          and(
+            eq(payments.userId, req.user.id),
+            eq(payments.status, "completed"),
+            sql`valid_until > NOW()`
+          )
+        )
+        .orderBy(desc(payments.createdAt))
+        .limit(1);
+
+      // Get completed exams
+      const userExams = await db
+        .select()
+        .from(exams)
+        .where(
+          and(
+            eq(exams.userId, req.user.id),
+            sql`score IS NOT NULL`
+          )
+        )
+        .orderBy(desc(exams.startTime));
+
+      // Get simulation logs for category performance
+      const simulationLogs = await db
+        .select({
+          simulationLog: examSimulationLogs,
+          question: questions
+        })
+        .from(examSimulationLogs)
+        .leftJoin(questions, eq(examSimulationLogs.questionId, questions.id))
+        .where(eq(examSimulationLogs.userId, req.user.id));
+
+      // Process exam results
+      const recentExams = userExams.slice(0, 5).map(exam => ({
+        id: exam.id,
+        score: exam.score || 0,
+        startTime: exam.startTime.toISOString(),
+        endTime: exam.endTime?.toISOString() || new Date().toISOString(),
+        questionCount: exam.questions.length,
+      }));
+
+      const totalExams = userExams.length;
+      const avgScore = userExams.length > 0 
+        ? userExams.reduce((sum, exam) => sum + (exam.score || 0), 0) / userExams.length
+        : 0;
+      const passCount = userExams.filter(exam => (exam.score || 0) >= 70).length;
+      const passRate = totalExams > 0 ? (passCount / totalExams) * 100 : 0;
+
+      // Process category performance
+      const categoryStats: Record<string, { correct: number, total: number }> = {};
+      simulationLogs.forEach(log => {
+        if (log.question && log.simulationLog) {
+          const category = log.question.category;
+          if (!categoryStats[category]) {
+            categoryStats[category] = { correct: 0, total: 0 };
+          }
+          categoryStats[category].total += 1;
+          if (log.simulationLog.isCorrect) {
+            categoryStats[category].correct += 1;
+          }
+        }
+      });
+
+      const categoryPerformance = Object.entries(categoryStats).map(([category, stats]) => ({
+        category,
+        correctCount: stats.correct,
+        totalCount: stats.total,
+        percentage: Math.round((stats.correct / stats.total) * 100)
+      }));
+
+      // Generate weekly activity data
+      const today = new Date();
+      const weeklyActivity = [];
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dateString = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        
+        // Count questions attempted on this day
+        const dayQuestions = simulationLogs.filter(log => {
+          const logDate = new Date(log.simulationLog.timestamp);
+          return logDate.toDateString() === date.toDateString();
+        }).length;
+        
+        weeklyActivity.push({
+          date: dateString,
+          questions: dayQuestions
+        });
+      }
+
+      // Calculate total questions from payment journey or logs
+      const totalQuestions = activePayment?.metadata?.journey?.total_questions_attempted || 
+        simulationLogs.length;
+
+      const progressData = {
+        totalExams,
+        avgScore,
+        passRate,
+        totalQuestions,
+        journey: activePayment?.metadata?.journey,
+        recentExams,
+        categoryPerformance,
+        weeklyActivity
+      };
+
+      res.json(progressData);
+    } catch (error) {
+      console.error('Error fetching user progress:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch progress data",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
 
   app.get("/api/payments/status", async (req, res) => {
     try {
