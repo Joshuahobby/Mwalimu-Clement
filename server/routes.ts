@@ -19,6 +19,18 @@ import { initiatePayment, verifyPayment, verifyWebhookSignature } from "./servic
 import { updateProfileSchema } from "@shared/schema"; 
 import { users } from "@shared/schema"; 
 
+interface User {
+  id: number;
+  email: string;
+  username: string;
+}
+
+interface VerificationResponse {
+  status: string;
+  amount?: number;
+  payment_method?: string;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
 
@@ -195,7 +207,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       answer: req.body.answer,
     });
 
-    const answers = simulation.answers || [];
+    const answers = simulation.answers || new Array(20).fill(-1);
     answers[simulation.currentQuestionIndex] = req.body.answer;
 
     await db
@@ -551,7 +563,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               ...req.body,
               flutterwave_tx_ref: tx_ref,
               verified_at: new Date().toISOString(),
-              verification_method: 'webhook'
+              verification_method: 'webhook' as const
             }
           })
           .where(
@@ -662,7 +674,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     metadata: {
                       tx_ref: String(tx_ref),
                       transaction_id: String(transaction_id),
-                      payment_method: transaction.paymentMethod || 'mobilemoney',
+                      payment_method: transaction.payment_method || 'mobilemoney',
                       created_at: new Date().toISOString(),
                       verified_at: new Date().toISOString(),
                       verification_method: 'redirect_recovery'
@@ -931,7 +943,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .orderBy(desc(exams.startTime));
 
       // Process category performance
-      const categoryStats: Record<string, { correct: number, total: number }> = {};
+      const categoryStats: Record<string, { correct: number; total: number }> = {};
       simulationLogs.forEach(log => {
         if (log.question && log.simulationLog) {
           const category = log.question.category;
@@ -954,12 +966,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Find strongest and weakest categories
       const sortedCategories = [...categoryPerformance].sort((a, b) => b.percentage - a.percentage);
-      const strongestCategory = sortedCategories[0]?.category;const weakestCategory = sortedCategories[sortedCategories.length - 1]?.category;
+      const strongestCategory = sortedCategories[0]?.category;
+      const weakestCategory = sortedCategories[sortedCategories.length - 1]?.category;
 
       // Calculate study streak
-      const today = newDate();
-      let streak = 0;
-      let currentDate = today;
+      const today = new Date();
+      let streak = 0;      let currentDate = today;
       const dailyActivity = new Set();
 
       simulationLogs.forEach(log => {
@@ -1016,7 +1028,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           startTime: exam.startTime.toISOString(),
           endTime: exam.endTime?.toISOString() || new Date().toISOString(),
           questionCount: exam.questions.length,
-          correctAnswers: exam.correctAnswers || 0,
+          correctAnswers: exam.answers.filter(a => a !== -1).length //added
         })),
         categoryPerformance,
         weeklyActivity,

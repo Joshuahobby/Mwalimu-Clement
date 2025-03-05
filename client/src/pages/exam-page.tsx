@@ -29,15 +29,29 @@ export default function ExamPage() {
   const [, setLocation] = useLocation();
 
   // Fetch current exam
-  const { data: exam, isLoading: examLoading } = useQuery<Exam>({
+  const { data: exam, isLoading: examLoading, error: examError } = useQuery<Exam>({
     queryKey: ["/api/exams/current"],
     retry: false,
+    onError: (error: Error) => {
+      toast({
+        title: "Error loading exam",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   });
 
   // Fetch questions based on exam data
-  const { data: questions, isLoading: questionsLoading } = useQuery<Question[]>({
+  const { data: questions, isLoading: questionsLoading, error: questionsError } = useQuery<Question[]>({
     queryKey: ["/api/questions"],
     enabled: !!exam && !exam.endTime,
+    onError: (error: Error) => {
+      toast({
+        title: "Error loading questions",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   });
 
   const startExamMutation = useMutation({
@@ -118,6 +132,19 @@ export default function ExamPage() {
     );
   }
 
+  // Show error states
+  if (examError || questionsError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <h1 className="text-2xl font-bold text-red-600 mb-4">
+          {examError ? "Failed to load exam" : "Failed to load questions"}
+        </h1>
+        <Button onClick={() => setLocation("/")}>Return to Dashboard</Button>
+      </div>
+    );
+  }
+
+
   // Show confirmation dialog when there's no active exam
   if (!exam || exam.endTime) {
     return (
@@ -180,6 +207,15 @@ export default function ExamPage() {
   };
 
   const handleSubmit = () => {
+    if (!exam) {
+      toast({
+        title: "Error",
+        description: "No active exam found",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Check if all questions are answered
     const unansweredCount = answers.filter(a => a === -1).length;
     if (!isTimeUp && unansweredCount > 0) {
@@ -191,6 +227,17 @@ export default function ExamPage() {
       setShowSubmitDialog(true);
       return;
     }
+
+    // Validate answers array length
+    if (answers.length !== exam.questions.length) {
+      toast({
+        title: "Error",
+        description: "Invalid answers array length",
+        variant: "destructive",
+      });
+      return;
+    }
+
     submitMutation.mutate();
   };
 
@@ -204,7 +251,7 @@ export default function ExamPage() {
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           {examStartTime && (
-            <Timer 
+            <Timer
               startTime={examStartTime}
               duration={20 * 60 * 1000} // 20 minutes in milliseconds
               onTimeUp={handleTimeUp}
@@ -264,7 +311,7 @@ export default function ExamPage() {
               {isTimeUp ? "Time's Up!" : "Confirm Submission"}
             </DialogTitle>
             <DialogDescription>
-              {isTimeUp 
+              {isTimeUp
                 ? "Your time is up. Your exam will be submitted now."
                 : "Are you sure you want to submit your exam? This action cannot be undone."}
             </DialogDescription>
@@ -275,7 +322,7 @@ export default function ExamPage() {
                 Continue Exam
               </Button>
             )}
-            <Button 
+            <Button
               onClick={() => {
                 setShowSubmitDialog(false);
                 submitMutation.mutate();

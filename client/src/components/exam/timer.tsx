@@ -15,11 +15,16 @@ export default function Timer({ startTime, duration, onTimeUp }: TimerProps) {
   const [warningShown, setWarningShown] = useState(false);
 
   useEffect(() => {
-    // Calculate initial time left
-    const now = new Date().getTime();
-    const start = new Date(startTime).getTime();
-    const initialTimeLeft = Math.max(0, duration - (now - start));
-    setTimeLeft(initialTimeLeft);
+    // Calculate initial time left with server time sync
+    const calculateTimeLeft = () => {
+      const now = new Date().getTime();
+      const start = new Date(startTime).getTime();
+      const elapsed = now - start;
+      return Math.max(0, duration - elapsed);
+    };
+
+    // Set initial time
+    setTimeLeft(calculateTimeLeft());
 
     // Clear any existing interval
     if (timerRef.current) {
@@ -28,10 +33,7 @@ export default function Timer({ startTime, duration, onTimeUp }: TimerProps) {
 
     // Set up new interval
     timerRef.current = setInterval(() => {
-      const currentTime = new Date().getTime();
-      const elapsedTime = currentTime - start;
-      const remaining = Math.max(0, duration - elapsedTime);
-
+      const remaining = calculateTimeLeft();
       setTimeLeft(remaining);
 
       // Show warning when 5 minutes remaining
@@ -54,7 +56,7 @@ export default function Timer({ startTime, duration, onTimeUp }: TimerProps) {
         clearInterval(timerRef.current);
       }
     };
-  }, [startTime, duration]); // Only re-run if startTime or duration changes
+  }, [startTime, duration, onTimeUp, warningShown]); // Add onTimeUp to dependencies
 
   const minutes = Math.floor(timeLeft / 60000);
   const seconds = Math.floor((timeLeft % 60000) / 1000);
