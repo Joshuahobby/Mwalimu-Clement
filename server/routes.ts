@@ -552,77 +552,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
     try {
-        const examId = parseInt(req.params.id);
+      const examId = parseInt(req.params.id);
 
-        // Get the exam and verify ownership
-        const [exam] = await db
-            .select()
-            .from(exams)
-            .where(
-                and(
-                    eq(exams.id, examId),
-                    eq(exams.userId, req.user.id)
-                )
-            );
+      // Get the exam and verify ownership
+      const [exam] = await db
+        .select()
+        .from(exams)
+        .where(
+          and(
+            eq(exams.id, examId),
+            eq(exams.userId, req.user.id)
+          )
+        );
 
-        if (!exam) {
-            return res.status(404).json({ message: "Exam not found" });
-        }
+      if (!exam) {
+        return res.status(404).json({ message: "Exam not found" });
+      }
 
-        if (exam.endTime) {
-            return res.status(400).json({ message: "Exam already completed" });
-        }
+      if (exam.endTime) {
+        return res.status(400).json({ message: "Exam already completed" });
+      }
 
-        // Get questions for the exam with proper type handling
-        const examQuestions = await db
-            .select()
-            .from(questions)
-            .where(sql`id = ANY(${JSON.stringify(exam.questions)}::int[])`)
-            .orderBy(sql`array_position(${JSON.stringify(exam.questions)}::int[], id)`);
+      // Get questions for the exam with proper type handling
+      const examQuestions = await db
+        .select()
+        .from(questions)
+        .where(sql`id = ANY(${exam.questions}::int[])`)
+        .orderBy(sql`array_position(${exam.questions}::int[], id)`);
 
-        // Calculate correct answers
-        const correctCount = examQuestions.reduce((count, question, index) => {
-            return count + (req.body.answers[index] === question.correctAnswer ? 1 : 0);
-        }, 0);
+      // Calculate correct answers
+      const correctCount = examQuestions.reduce((count, question, index) => {
+        return count + (req.body.answers[index] === question.correctAnswer ? 1 : 0);
+      }, 0);
 
-        // Calculate score (percentage)
-        const score = Math.round((correctCount / examQuestions.length) * 100);
+      // Calculate score (percentage)
+      const score = Math.round((correctCount / examQuestions.length) * 100);
 
-        // Update exam with answers and score
-        const [updatedExam] = await db
-            .update(exams)
-            .set({
-                answers: req.body.answers, // Don't stringify - drizzle handles this
-                score,
-                endTime: new Date()
-            })
-            .where(eq(exams.id, examId))
-            .returning();
+      // Update exam with answers and score
+      const [updatedExam] = await db
+        .update(exams)
+        .set({
+          answers: sql`${JSON.stringify(req.body.answers)}::int[]`,
+          score,
+          endTime: new Date()
+        })
+        .where(eq(exams.id, examId))
+        .returning();
 
-        console.log('Exam completed:', {
-            id: updatedExam.id,
-            score: updatedExam.score
-        });
+      console.log('Exam completed:', {
+        id: updatedExam.id,
+        score: updatedExam.score,
+        answers: updatedExam.answers
+      });
 
-        res.json(updatedExam);
+      res.json(updatedExam);
     } catch (error) {
-        console.error('Error updating exam:', error);
-        
-        // Provide more specific error message for common issues
-        let errorMessage = "Unknown error";
-        if (error instanceof Error) {
-            errorMessage = error.message;
-            
-            // Check for specific database errors
-            if (errorMessage.includes('malformed array literal')) {
-                errorMessage = "Invalid answer format. Please try again.";
-            }
+      console.error('Error updating exam:', error);
+
+      // Provide more specific error message for common issues
+      let errorMessage = "Unknown error";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+
+        // Check for specific database errors
+        if (errorMessage.includes('malformed array literal')) {
+          errorMessage = "Invalid answer format. Please try again.";
         }
-        
-        res.status(500).json({ 
-            message: "Failed to update exam",
-            error: errorMessage
-        });
+      }
+
+      res.status(500).json({ 
+        message: "Failed to update exam",
+        error: errorMessage
+      });
     }
   });
 
@@ -1232,7 +1233,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch payment history" });
     }
   });
-
 
   app.get("/api/user/progress", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);

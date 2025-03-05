@@ -32,12 +32,12 @@ export default function ExamPage() {
   const { data: exam, isLoading: examLoading, error: examError } = useQuery<Exam>({
     queryKey: ["/api/exams/current"],
     retry: false,
-    onError: (error: Error) => {
-      toast({
-        title: "Error loading exam",
-        description: error.message,
-        variant: "destructive",
-      });
+    staleTime: 0,
+    onSuccess: (data) => {
+      if (data && !data.endTime) {
+        setAnswers(data.answers ?? new Array(data.questions.length).fill(-1));
+        setExamStartTime(new Date(data.startTime));
+      }
     }
   });
 
@@ -45,20 +45,14 @@ export default function ExamPage() {
   const { data: questions, isLoading: questionsLoading, error: questionsError } = useQuery<Question[]>({
     queryKey: ["/api/questions"],
     enabled: !!exam && !exam.endTime,
-    onError: (error: Error) => {
-      toast({
-        title: "Error loading questions",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
+    staleTime: 0
   });
 
   const startExamMutation = useMutation({
     mutationFn: async () => {
       const startTime = new Date();
       const res = await apiRequest("POST", "/api/exams", {
-        questionCount: 20, // Always 20 questions
+        questionCount: 20,
         startTime: startTime.toISOString(),
       });
       if (!res.ok) {
@@ -68,7 +62,7 @@ export default function ExamPage() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/exams/current"] });
-      setAnswers(new Array(20).fill(-1)); // Initialize answers array with -1 (unanswered)
+      setAnswers(new Array(20).fill(-1));
       setShowConfirmation(false);
       setCurrentQuestionIndex(0);
       setExamStartTime(new Date(data.startTime));
@@ -96,10 +90,6 @@ export default function ExamPage() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/exams/current"] });
-      const correctAnswers = data.score ? Math.round((data.score / 100) * 20) : 0;
-      const passed = data.score >= 70; // 70% corresponds to 14/20 marks (to be safe)
-      
-      // Navigate to the results page instead of home
       setLocation(`/exam-results/${data.id}`);
     },
     onError: (error: Error) => {
@@ -111,12 +101,34 @@ export default function ExamPage() {
     },
   });
 
-  useEffect(() => {
-    if (exam && !exam.endTime) {
-      setAnswers(new Array(exam.questions.length).fill(-1));
-      setExamStartTime(new Date(exam.startTime));
+  const handleTimeUp = () => {
+    setIsTimeUp(true);
+    setShowSubmitDialog(true);
+  };
+
+  const handleSubmit = () => {
+    if (!exam) {
+      toast({
+        title: "Error",
+        description: "No active exam found",
+        variant: "destructive",
+      });
+      return;
     }
-  }, [exam]);
+
+    const unansweredCount = answers.filter(a => a === -1).length;
+    if (!isTimeUp && unansweredCount > 0) {
+      toast({
+        title: "Warning",
+        description: `You have ${unansweredCount} unanswered questions. Are you sure you want to submit?`,
+        variant: "destructive",
+      });
+      setShowSubmitDialog(true);
+      return;
+    }
+
+    submitMutation.mutate();
+  };
 
   // Show loading state
   if (examLoading || questionsLoading || startExamMutation.isPending) {
@@ -141,7 +153,6 @@ export default function ExamPage() {
       </div>
     );
   }
-
 
   // Show confirmation dialog when there's no active exam
   if (!exam || exam.endTime) {
@@ -191,67 +202,14 @@ export default function ExamPage() {
     );
   }
 
-  const handleAnswer = (answerIndex: number) => {
-    setAnswers(prev => {
-      const newAnswers = [...prev];
-      newAnswers[currentQuestionIndex] = answerIndex;
-      return newAnswers;
-    });
-  };
-
-  const handleTimeUp = () => {
-    setIsTimeUp(true);
-    setShowSubmitDialog(true);
-  };
-
-  const handleSubmit = () => {
-    if (!exam) {
-      toast({
-        title: "Error",
-        description: "No active exam found",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Check if all questions are answered
-    const unansweredCount = answers.filter(a => a === -1).length;
-    if (!isTimeUp && unansweredCount > 0) {
-      toast({
-        title: "Warning",
-        description: `You have ${unansweredCount} unanswered questions. Are you sure you want to submit?`,
-        variant: "destructive",
-      });
-      setShowSubmitDialog(true);
-      return;
-    }
-
-    // Validate answers array length
-    if (answers.length !== exam.questions.length) {
-      toast({
-        title: "Error",
-        description: "Invalid answers array length",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    submitMutation.mutate();
-  };
-
-  // Only show exam interface if we have a start time
-  if (!examStartTime) {
-    return null;
-  }
-
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           {examStartTime && (
             <Timer
-              startTime={examStartTime}
-              duration={20 * 60 * 1000} // 20 minutes in milliseconds
+              startTime={examStartTime.toISOString()}
+              duration={20 * 60 * 1000}
               onTimeUp={handleTimeUp}
             />
           )}
@@ -263,7 +221,13 @@ export default function ExamPage() {
             <QuestionCard
               question={currentQuestion}
               selectedAnswer={answers[currentQuestionIndex]}
-              onAnswer={handleAnswer}
+              onAnswer={(answerIndex) => {
+                setAnswers(prev => {
+                  const newAnswers = [...prev];
+                  newAnswers[currentQuestionIndex] = answerIndex;
+                  return newAnswers;
+                });
+              }}
             />
 
             <div className="flex justify-between mt-4">
@@ -301,7 +265,6 @@ export default function ExamPage() {
         </div>
       </div>
 
-      {/* Submit Confirmation Dialog */}
       <Dialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>
         <DialogContent>
           <DialogHeader>
