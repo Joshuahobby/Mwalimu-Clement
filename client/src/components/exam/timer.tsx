@@ -5,7 +5,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface TimerProps {
   startTime: Date;
-  duration: number;
+  duration: number; // in milliseconds
   onTimeUp: () => void;
 }
 
@@ -14,16 +14,12 @@ export default function Timer({ startTime, duration, onTimeUp }: TimerProps) {
   const [timeLeft, setTimeLeft] = useState(duration);
   const [warningShown, setWarningShown] = useState(false);
 
-  const calculateTimeLeft = () => {
-    const now = new Date().getTime();
-    const start = startTime.getTime();
-    const elapsed = now - start;
-    return Math.max(0, duration - elapsed);
-  };
-
   useEffect(() => {
-    // Initial calculation
-    setTimeLeft(calculateTimeLeft());
+    // Calculate initial time left
+    const now = new Date().getTime();
+    const start = new Date(startTime).getTime();
+    const initialTimeLeft = Math.max(0, duration - (now - start));
+    setTimeLeft(initialTimeLeft);
 
     // Clear any existing interval
     if (timerRef.current) {
@@ -32,7 +28,10 @@ export default function Timer({ startTime, duration, onTimeUp }: TimerProps) {
 
     // Set up new interval
     timerRef.current = setInterval(() => {
-      const remaining = calculateTimeLeft();
+      const currentTime = new Date().getTime();
+      const elapsedTime = currentTime - start;
+      const remaining = Math.max(0, duration - elapsedTime);
+
       setTimeLeft(remaining);
 
       // Show warning when 5 minutes remaining
@@ -40,6 +39,7 @@ export default function Timer({ startTime, duration, onTimeUp }: TimerProps) {
         setWarningShown(true);
       }
 
+      // End exam when time is up
       if (remaining <= 0) {
         if (timerRef.current) {
           clearInterval(timerRef.current);

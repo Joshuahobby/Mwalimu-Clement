@@ -43,7 +43,6 @@ export default function ExamPage() {
   const startExamMutation = useMutation({
     mutationFn: async () => {
       const startTime = new Date();
-      setExamStartTime(startTime); // Set exam start time for timer
       const res = await apiRequest("POST", "/api/exams", {
         questionCount: 20, // Always 20 questions
         startTime: startTime.toISOString(),
@@ -58,6 +57,7 @@ export default function ExamPage() {
       setAnswers(new Array(20).fill(-1)); // Initialize answers array with -1 (unanswered)
       setShowConfirmation(false);
       setCurrentQuestionIndex(0);
+      setExamStartTime(new Date(data.startTime));
     },
     onError: (error: Error) => {
       toast({
@@ -203,11 +203,13 @@ export default function ExamPage() {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
-          <Timer 
-            startTime={examStartTime}
-            duration={20 * 60 * 1000} // 20 minutes in milliseconds
-            onTimeUp={handleTimeUp}
-          />
+          {examStartTime && (
+            <Timer 
+              startTime={examStartTime}
+              duration={20 * 60 * 1000} // 20 minutes in milliseconds
+              onTimeUp={handleTimeUp}
+            />
+          )}
           <AccessibilitySettings />
         </div>
 
