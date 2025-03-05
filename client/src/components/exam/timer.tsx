@@ -7,8 +7,10 @@ interface TimerProps {
   isPaused?: boolean;
 }
 
-const Timer = ({ startTime, duration, onTimeUp, isPaused = false }: TimerProps) => {
-  const [timeLeft, setTimeLeft] = useState(duration);
+const TWENTY_MINUTES = 20 * 60 * 1000; // 20 minutes in milliseconds
+
+const Timer = ({ startTime, duration = TWENTY_MINUTES, onTimeUp, isPaused = false }: TimerProps) => {
+  const [timeLeft, setTimeLeft] = useState(TWENTY_MINUTES);
   const [warningShown, setWarningShown] = useState(false);
   const timerRef = useRef<NodeJS.Timeout>();
 
@@ -18,7 +20,9 @@ const Timer = ({ startTime, duration, onTimeUp, isPaused = false }: TimerProps) 
       const now = new Date().getTime();
       const start = new Date(startTime).getTime();
       const elapsed = now - start;
-      return Math.max(0, duration - elapsed);
+      // Ensure duration is capped at 20 minutes
+      const maxDuration = Math.min(duration, TWENTY_MINUTES);
+      return Math.max(0, maxDuration - elapsed);
     };
 
     // Set initial time
@@ -66,8 +70,8 @@ const Timer = ({ startTime, duration, onTimeUp, isPaused = false }: TimerProps) 
 
   // Different colors based on time remaining
   let colorClass = "text-green-500";
-  if (timeLeft < 60000) colorClass = "text-red-500 animate-pulse";
-  else if (timeLeft < 180000) colorClass = "text-amber-500";
+  if (timeLeft < 60000) colorClass = "text-red-500 animate-pulse"; // Last minute
+  else if (timeLeft < 300000) colorClass = "text-amber-500"; // Last 5 minutes
 
   return (
     <div className="text-center">
