@@ -21,6 +21,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -38,6 +39,7 @@ export default function ExamSimulationPage() {
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Get all available questions
   const { data: questions } = useQuery<Question[]>({
@@ -70,6 +72,9 @@ export default function ExamSimulationPage() {
         userId: user?.id,
         startTime: new Date().toISOString(),
       });
+      if (!res.ok) {
+        throw new Error('Failed to start simulation');
+      }
       return res.json();
     },
     onSuccess: (data) => {
@@ -80,15 +85,26 @@ export default function ExamSimulationPage() {
         description: "Good luck with your exam!",
       });
     },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   // Submit answer
   const submitAnswerMutation = useMutation({
     mutationFn: async ({ questionId, answer }: { questionId: number; answer: number }) => {
-      const res = await apiRequest("POST", `/api/simulations/${activeSimulation?.id}/answer`, {
+      if (!activeSimulation?.id) throw new Error('No active simulation');
+      const res = await apiRequest("POST", `/api/simulations/${activeSimulation.id}/answer`, {
         questionId,
         answer,
       });
+      if (!res.ok) {
+        throw new Error('Failed to submit answer');
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -98,6 +114,15 @@ export default function ExamSimulationPage() {
       } else {
         handleNextQuestion();
       }
+      setIsSubmitting(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+      setIsSubmitting(false);
     },
   });
 
@@ -123,11 +148,10 @@ export default function ExamSimulationPage() {
   useEffect(() => {
     if (!activeSimulation || !questions) return;
 
-    const question = questions.find(
-      (q) => q.id === activeSimulation.questions[activeSimulation.currentQuestionIndex]
-    );
+    const currentQuestionId = activeSimulation.questions[activeSimulation.currentQuestionIndex || 0];
+    const question = questions.find(q => q.id === currentQuestionId);
     setCurrentQuestion(question || null);
-    setTimeLeft(activeSimulation.timePerQuestion);
+    setTimeLeft(activeSimulation.timePerQuestion || 60);
     setSelectedAnswer(null);
     setShowFeedback(false);
   }, [activeSimulation, questions]);
@@ -135,7 +159,7 @@ export default function ExamSimulationPage() {
   const handleNextQuestion = () => {
     if (!activeSimulation) return;
 
-    const nextIndex = activeSimulation.currentQuestionIndex + 1;
+    const nextIndex = (activeSimulation.currentQuestionIndex || 0) + 1;
     if (nextIndex >= activeSimulation.questions.length) {
       // End simulation
       apiRequest("POST", `/api/simulations/${activeSimulation.id}/complete`);
@@ -260,7 +284,7 @@ export default function ExamSimulationPage() {
                   className="w-full"
                   disabled={startSimulationMutation.isPending}
                 >
-                  Start Simulation
+                  {startSimulationMutation.isPending ? "Starting..." : "Start Simulation"}
                 </Button>
               </form>
             </Form>
@@ -275,7 +299,7 @@ export default function ExamSimulationPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Question {activeSimulation.currentQuestionIndex + 1}</CardTitle>
+            <CardTitle>Question {(activeSimulation.currentQuestionIndex || 0) + 1}</CardTitle>
             {activeSimulation.showTimer && (
               <div className="flex items-center gap-2">
                 <Timer className="h-4 w-4" />
@@ -285,7 +309,7 @@ export default function ExamSimulationPage() {
           </div>
           <Progress
             value={
-              ((activeSimulation.currentQuestionIndex + 1) / activeSimulation.questions.length) * 100
+              (((activeSimulation.currentQuestionIndex || 0) + 1) / activeSimulation.questions.length) * 100
             }
             className="h-2"
           />
@@ -353,14 +377,16 @@ export default function ExamSimulationPage() {
                 });
                 return;
               }
+              if (isSubmitting) return;
+              setIsSubmitting(true);
               submitAnswerMutation.mutate({
                 questionId: currentQuestion!.id,
                 answer: selectedAnswer,
               });
             }}
-            disabled={selectedAnswer === null || submitAnswerMutation.isPending}
+            disabled={selectedAnswer === null || isSubmitting}
           >
-            {submitAnswerMutation.isPending ? "Submitting..." : "Submit Answer"}
+            {isSubmitting ? "Submitting..." : "Submit Answer"}
           </Button>
         </CardFooter>
       </Card>

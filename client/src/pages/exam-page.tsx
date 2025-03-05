@@ -22,6 +22,8 @@ export default function ExamPage() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<number[]>([]);
   const [showConfirmation, setShowConfirmation] = useState(true);
+  const [showSubmitDialog, setShowSubmitDialog] = useState(false);
+  const [isTimeUp, setIsTimeUp] = useState(false);
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
@@ -64,9 +66,10 @@ export default function ExamPage() {
 
   const submitMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("PATCH", `/api/exams/${exam!.id}`, {
+      if (!exam) throw new Error('No active exam');
+      const res = await apiRequest("PATCH", `/api/exams/${exam.id}`, {
         answers,
-        endTime: new Date(),
+        endTime: new Date().toISOString(),
       });
       if (!res.ok) {
         throw new Error('Failed to submit exam');
@@ -118,7 +121,7 @@ export default function ExamPage() {
           <DialogHeader>
             <DialogTitle>Are you ready to start this exam?</DialogTitle>
             <DialogDescription>
-              If you are not ready, please click on 'I am not ready'. Otherwise click on 'I want to start'. 
+              If you are not ready, please click on 'I am not ready'. Otherwise click on 'I want to start'.
               Then you will be clicking on (Next) to go to the next question and (Previous) to go back to previous questions.
             </DialogDescription>
           </DialogHeader>
@@ -166,7 +169,23 @@ export default function ExamPage() {
     });
   };
 
+  const handleTimeUp = () => {
+    setIsTimeUp(true);
+    setShowSubmitDialog(true);
+  };
+
   const handleSubmit = () => {
+    // Check if all questions are answered
+    const unansweredCount = answers.filter(a => a === -1).length;
+    if (!isTimeUp && unansweredCount > 0) {
+      toast({
+        title: "Warning",
+        description: `You have ${unansweredCount} unanswered questions. Are you sure you want to submit?`,
+        variant: "destructive",
+      });
+      setShowSubmitDialog(true);
+      return;
+    }
     submitMutation.mutate();
   };
 
@@ -177,7 +196,7 @@ export default function ExamPage() {
           <Timer 
             startTime={new Date(exam.startTime)}
             duration={20 * 60 * 1000} // 20 minutes
-            onTimeUp={handleSubmit}
+            onTimeUp={handleTimeUp}
           />
           <AccessibilitySettings />
         </div>
@@ -219,11 +238,43 @@ export default function ExamPage() {
               onClick={handleSubmit}
               disabled={submitMutation.isPending}
             >
-              Submit Exam
+              {submitMutation.isPending ? "Submitting..." : "Submit Exam"}
             </Button>
           </div>
         </div>
       </div>
+
+      {/* Submit Confirmation Dialog */}
+      <Dialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {isTimeUp ? "Time's Up!" : "Confirm Submission"}
+            </DialogTitle>
+            <DialogDescription>
+              {isTimeUp 
+                ? "Your time is up. Your exam will be submitted now."
+                : "Are you sure you want to submit your exam? This action cannot be undone."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex justify-between">
+            {!isTimeUp && (
+              <Button variant="outline" onClick={() => setShowSubmitDialog(false)}>
+                Continue Exam
+              </Button>
+            )}
+            <Button 
+              onClick={() => {
+                setShowSubmitDialog(false);
+                submitMutation.mutate();
+              }}
+              disabled={submitMutation.isPending}
+            >
+              {submitMutation.isPending ? "Submitting..." : "Submit Exam"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
