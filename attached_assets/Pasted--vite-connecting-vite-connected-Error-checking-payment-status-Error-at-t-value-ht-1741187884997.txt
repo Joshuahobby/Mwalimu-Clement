@@ -1,0 +1,75 @@
+[vite] connecting...
+[vite] connected.
+Error checking payment status: 
+Error {}
+
+at t.value (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:17465)
+at new t (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630)
+at t.value (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766)
+at https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:34400
+Error checking payment status: 
+Error {}
+
+at t.value (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:17465)
+at new t (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630)
+at t.value (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766)
+at https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:34400
+Error checking payment status: 
+Error {}
+
+at t.value (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:17465)
+at new t (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630)
+at t.value (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766)
+at https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:34400
+Error checking payment status: 
+Error {}
+
+at t.value (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:17465)
+at new t (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630)
+at t.value (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766)
+at https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:34400
+Error checking payment status: 
+Error {}
+
+at t.value (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:17465)
+at new t (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630)
+at t.value (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766)
+at https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:34400
+Error checking payment status: 
+Error {}
+
+at t.value (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:17465)
+at new t (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630)
+at t.value (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766)
+at https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:34400
+Error checking payment status: 
+Error {}
+
+at t.value (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:17465)
+at new t (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630)
+at t.value (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766)
+at https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:34400
+Error checking payment status: 
+Error {}
+
+at t.value (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:17465)
+at new t (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630)
+at t.value (https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766)
+at https://59019b41-5aa2-4525-87ed-5a7fd23ecf51-00-2ftxgx8ypo8sn.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:34400
+Error checking payment status: 
+Error {}
+
+Error checking payment status: 
+Error {}
+
+Error checking payment status: 
+Error {}
+
+Error checking payment status: 
+Error {}
+
+Error checking payment status: 
+Error {}
+
+Error checking payment status: 
+Error {}
