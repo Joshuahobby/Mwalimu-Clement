@@ -28,12 +28,16 @@ function Router() {
   );
 }
 
+import PaymentToastProvider from "@/components/notifications/payment-toast";
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Router />
-        <Toaster />
+        <PaymentToastProvider>
+          <Router />
+          <Toaster />
+        </PaymentToastProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

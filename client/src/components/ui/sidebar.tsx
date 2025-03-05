@@ -197,7 +197,7 @@ const Sidebar = React.forwardRef<
           <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
-            className="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+            className="w-[85vw] max-w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:top-2 [&>button]:right-2 [&>button]:z-50"
             style={
               {
                 "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -205,7 +205,22 @@ const Sidebar = React.forwardRef<
             }
             side={side}
           >
-            <div className="flex h-full w-full flex-col">{children}</div>
+            <div className="flex h-full w-full flex-col overflow-y-auto">
+              <div className="sticky top-0 z-10 flex items-center justify-between bg-sidebar p-4 shadow-sm">
+                <h2 className="text-lg font-semibold">Menu</h2>
+                <button 
+                  onClick={() => setOpenMobile(false)}
+                  className="rounded-full p-2 hover:bg-sidebar-accent"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+                  </svg>
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                {children}
+              </div>
+            </div>
           </SheetContent>
         </Sheet>
       )
