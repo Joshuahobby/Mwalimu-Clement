@@ -13,6 +13,30 @@ import PaymentSuccessPage from "@/pages/payment-success";
 import ExamSimulationPage from "@/pages/exam-simulation-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import ProgressDashboard from "./pages/progress-dashboard"; // Added import
+import { useEffect } from "react";
+
+function App() {
+  useEffect(() => {
+    // Check for user preference in localStorage
+    const savedTheme = localStorage.getItem("theme");
+    // Apply dark class if saved theme is dark
+    if (savedTheme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <Router />
+        <Toaster />
+        <PaymentToastProvider />
+      </AuthProvider>
+    </QueryClientProvider>
+  );
+}
 
 function Router() {
   return (
@@ -31,6 +55,8 @@ function Router() {
 }
 
 import PaymentToastProvider from "@/components/notifications/payment-toast";
+
+export default App;
 
 function App() {
   return (
