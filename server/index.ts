@@ -14,25 +14,6 @@ app.use(monitorDatabase);
 // Add health check endpoint before Vite middleware to avoid HTML response
 app.get('/api/health', healthCheck);
 
-// Add request logging with sensitive data masking
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    // Mask sensitive data
-    if (bodyJson && typeof bodyJson === 'object') {
-      const maskedBody = { ...bodyJson };
-      ['password', 'token', 'secret'].forEach(key => {
-        if (key in maskedBody) {
-          maskedBody[key] = '***';
-        }
-      });
-      capturedJsonResponse = maskedBody;
-    } else {
-
 // More detailed error handling middleware with specific error types
 const handleErrors = (err: any, req: Request, res: Response, next: NextFunction) => {
   const status = err.status || err.statusCode || 500;
@@ -75,6 +56,25 @@ const handleErrors = (err: any, req: Request, res: Response, next: NextFunction)
   });
 };
 
+
+// Add request logging with sensitive data masking
+app.use((req, res, next) => {
+  const start = Date.now();
+  const path = req.path;
+  let capturedJsonResponse: Record<string, any> | undefined = undefined;
+
+  const originalResJson = res.json;
+  res.json = function (bodyJson, ...args) {
+    // Mask sensitive data
+    if (bodyJson && typeof bodyJson === 'object') {
+      const maskedBody = { ...bodyJson };
+      ['password', 'token', 'secret'].forEach(key => {
+        if (key in maskedBody) {
+          maskedBody[key] = '***';
+        }
+      });
+      capturedJsonResponse = maskedBody;
+    } else {
       capturedJsonResponse = bodyJson;
     }
     return originalResJson.apply(res, [bodyJson, ...args]);
