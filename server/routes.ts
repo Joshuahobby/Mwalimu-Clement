@@ -565,7 +565,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const [updatedExam] = await db
             .update(exams)
             .set({
-                answers: req.body.answers,
+                answers: JSON.stringify(req.body.answers),
                 score,
                 endTime: new Date()
             })
