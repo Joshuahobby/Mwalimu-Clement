@@ -126,6 +126,7 @@ export const settings = pgTable("settings", {
   };
 });
 
+// Add new fields to examSimulations table for session recovery
 export const examSimulations = pgTable("exam_simulations", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -140,11 +141,18 @@ export const examSimulations = pgTable("exam_simulations", {
   showTimer: boolean("show_timer").default(true),
   allowSkip: boolean("allow_skip").default(true),
   allowReview: boolean("allow_review").default(true),
+  // New fields for session recovery
+  lastActiveAt: timestamp("last_active_at"),
+  timeRemaining: integer("time_remaining"), // Store remaining time in milliseconds
+  recoveryToken: text("recovery_token"), // To validate session recovery
+  recoveryAttempts: integer("recovery_attempts").default(0),
 }, (table) => {
   return {
     userIdIdx: index("simulation_user_id_idx").on(table.userId),
     startTimeIdx: index("simulation_start_time_idx").on(table.startTime),
     completedIdx: index("simulation_completed_idx").on(table.isCompleted),
+    // New index for recovery
+    recoveryTokenIdx: index("recovery_token_idx").on(table.recoveryToken),
   };
 });
 

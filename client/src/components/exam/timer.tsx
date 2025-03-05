@@ -1,27 +1,66 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface TimerProps {
   startTime: string;
   duration: number; // in milliseconds
   onTimeUp?: () => void;
   isPaused?: boolean;
+  simulationId?: number;
+  recoveryToken?: string;
+  onRecoveryTokenUpdate?: (token: string) => void;
 }
 
 const TWENTY_MINUTES = 20 * 60 * 1000; // 20 minutes in milliseconds
+const HEARTBEAT_INTERVAL = 30 * 1000; // Send heartbeat every 30 seconds
 
-const Timer = ({ onTimeUp, isPaused = false }: TimerProps) => {
+const Timer = ({ onTimeUp, isPaused = false, simulationId, recoveryToken, onRecoveryTokenUpdate }: TimerProps) => {
   const [timeLeft, setTimeLeft] = useState(TWENTY_MINUTES);
   const [warningShown, setWarningShown] = useState(false);
   const timerRef = useRef<NodeJS.Timeout>();
+  const heartbeatRef = useRef<NodeJS.Timeout>();
+  const { toast } = useToast();
+
+  // Send heartbeat to server
+  const sendHeartbeat = async () => {
+    if (!simulationId) return;
+
+    try {
+      const response = await apiRequest("POST", `/api/simulations/${simulationId}/heartbeat`, {
+        timeRemaining: timeLeft,
+        recoveryToken,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update session heartbeat');
+      }
+
+      const data = await response.json();
+      if (onRecoveryTokenUpdate) {
+        onRecoveryTokenUpdate(data.recoveryToken);
+      }
+    } catch (error) {
+      console.error('Heartbeat error:', error);
+      toast({
+        title: "Warning",
+        description: "Having trouble maintaining connection. Your progress is saved.",
+        variant: "destructive",
+      });
+    }
+  };
 
   useEffect(() => {
     // Clear any existing interval
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
+    if (heartbeatRef.current) {
+      clearInterval(heartbeatRef.current);
+    }
 
     if (!isPaused) {
-      // Set up new interval
+      // Set up timer interval
       timerRef.current = setInterval(() => {
         setTimeLeft((prevTime) => {
           const newTime = prevTime - 1000; // Decrease by 1 second (1000ms)
@@ -39,12 +78,21 @@ const Timer = ({ onTimeUp, isPaused = false }: TimerProps) => {
             if (timerRef.current) {
               clearInterval(timerRef.current);
             }
+            if (heartbeatRef.current) {
+              clearInterval(heartbeatRef.current);
+            }
             return 0;
           }
 
           return newTime;
         });
       }, 1000);
+
+      // Set up heartbeat interval
+      if (simulationId) {
+        sendHeartbeat(); // Initial heartbeat
+        heartbeatRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
+      }
     }
 
     // Cleanup function
@@ -52,8 +100,11 @@ const Timer = ({ onTimeUp, isPaused = false }: TimerProps) => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
+      if (heartbeatRef.current) {
+        clearInterval(heartbeatRef.current);
+      }
     };
-  }, [onTimeUp, isPaused, warningShown]);
+  }, [onTimeUp, isPaused, warningShown, simulationId]);
 
   const minutes = Math.floor(timeLeft / 60000);
   const seconds = Math.floor((timeLeft % 60000) / 1000);

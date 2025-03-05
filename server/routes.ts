@@ -11,13 +11,16 @@ import {
   exams,
   questions,
   examSimulations,
-  examSimulationLogs
+  examSimulationLogs,
+  studySessions,
+  settings
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { initiatePayment, verifyPayment, verifyWebhookSignature } from "./services/flutterwave";
 import { updateProfileSchema } from "@shared/schema"; 
 import { users } from "@shared/schema"; 
+import * as crypto from 'crypto';
 
 interface User {
   id: number;
@@ -263,6 +266,174 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     res.json(simulation);
+  });
+
+  // Add these routes to the registerRoutes function after the existing exam simulation routes
+
+  // Session heartbeat route
+  app.post("/api/simulations/:id/heartbeat", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const simulationId = parseInt(req.params.id);
+      const { timeRemaining } = req.body;
+
+      const [simulation] = await db
+        .update(examSimulations)
+        .set({
+          lastActiveAt: new Date(),
+          timeRemaining,
+          recoveryToken: req.body.recoveryToken || crypto.randomUUID(),
+        })
+        .where(
+          and(
+            eq(examSimulations.id, simulationId),
+            eq(examSimulations.userId, req.user.id),
+            eq(examSimulations.isCompleted, false)
+          )
+        )
+        .returning();
+
+      if (!simulation) {
+        return res.status(404).json({ message: "Simulation not found" });
+      }
+
+      res.json({ recoveryToken: simulation.recoveryToken });
+    } catch (error) {
+      console.error('Heartbeat update error:', error);
+      res.status(500).json({
+        message: "Failed to update session heartbeat",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Session recovery route
+  app.post("/api/simulations/recover", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const { recoveryToken } = req.body;
+
+      // Find the latest active session for this user with matching recovery token
+      const [simulation] = await db
+        .select()
+        .from(examSimulations)
+        .where(
+          and(
+            eq(examSimulations.userId, req.user.id),
+            eq(examSimulations.recoveryToken, recoveryToken),
+            eq(examSimulations.isCompleted, false)
+          )
+        )
+        .orderBy(desc(examSimulations.lastActiveAt))
+        .limit(1);
+
+      if (!simulation) {
+        return res.status(404).json({ message: "No recoverable session found" });
+      }
+
+      // Check if the session is still valid (within 5 minutes of last activity)
+      const lastActive = new Date(simulation.lastActiveAt || simulation.startTime);
+      const now = new Date();
+      const timeDiff = now.getTime() - lastActive.getTime();
+
+      if (timeDiff > 5 * 60 * 1000) { // 5 minutes timeout
+        // Mark session as completed if timed out
+        await db
+          .update(examSimulations)
+          .set({
+            isCompleted: true,
+            endTime: lastActive, // Use last active time as end time
+          })
+          .where(eq(examSimulations.id, simulation.id));
+
+        return res.status(410).json({ 
+          message: "Session expired",
+          reason: "timeout",
+          lastActiveAt: lastActive
+        });
+      }
+
+      // Increment recovery attempts
+      const [updatedSimulation] = await db
+        .update(examSimulations)
+        .set({
+          recoveryAttempts: (simulation.recoveryAttempts || 0) + 1,
+          lastActiveAt: now,
+          recoveryToken: crypto.randomUUID(), // Generate new token for security
+        })
+        .where(eq(examSimulations.id, simulation.id))
+        .returning();
+
+      // Return the session state for recovery
+      res.json({
+        simulation: updatedSimulation,
+        message: "Session recovered successfully"
+      });
+    } catch (error) {
+      console.error('Session recovery error:', error);
+      res.status(500).json({
+        message: "Failed to recover session",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Add session check endpoint
+  app.get("/api/simulations/active/check", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const [activeSession] = await db
+        .select()
+        .from(examSimulations)
+        .where(
+          and(
+            eq(examSimulations.userId, req.user.id),
+            eq(examSimulations.isCompleted, false)
+          )
+        )
+        .orderBy(desc(examSimulations.startTime))
+        .limit(1);
+
+      if (!activeSession) {
+        return res.json({ hasActiveSession: false });
+      }
+
+      // Check if session is still valid
+      const lastActive = new Date(activeSession.lastActiveAt || activeSession.startTime);
+      const now = new Date();
+      const timeDiff = now.getTime() - lastActive.getTime();
+
+      if (timeDiff > 5 * 60 * 1000) { // 5 minutes timeout
+        // Mark session as completed if timed out
+        await db
+          .update(examSimulations)
+          .set({
+            isCompleted: true,
+            endTime: lastActive,
+          })
+          .where(eq(examSimulations.id, activeSession.id));
+
+        return res.json({ 
+          hasActiveSession: false,
+          message: "Previous session expired",
+          lastActiveAt: lastActive
+        });
+      }
+
+      res.json({
+        hasActiveSession: true,
+        session: activeSession
+      });
+    } catch (error) {
+      console.error('Session check error:', error);
+      res.status(500).json({
+        message: "Failed to check session status",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
   });
 
   // Exams
@@ -736,7 +907,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               case "single": newValidUntil.setHours(newValidUntil.getHours() + 1); break;
               case "daily": newValidUntil.setDate(newValidUntil.getDate() + 1); break;
               case "weekly": newValidUntil.setDate(newValidUntil.getDate() + 7); break;
-              case "monthly": newValidUntil.setMonth(newValidUntil.getMonth() + 1); break;
+              case "monthly": newValidUntil.setMonth(validUntil.getMonth() + 1); break;
             }
 
             await db
@@ -1042,65 +1213,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .orderBy(desc(payments.createdAt))
         .limit(1);
 
-  // Maintenance mode toggle
-  app.post("/api/admin/maintenance", async (req, res) => {
-    if (!req.isAuthenticated() || !req.user.isAdmin) return res.sendStatus(403);
+      // Maintenance mode toggle
+      app.post("/api/admin/maintenance", async (req, res) => {
+        if (!req.isAuthenticated() || !req.user.isAdmin) return res.sendStatus(403);
 
-    try {
-      const { enabled, message } = req.body;
+        try {
+          const { enabled, message } = req.body;
 
-      // Update or create the maintenance mode setting
-      await db
-        .insert(settings)
-        .values({
-          key: 'maintenance_mode',
-          value: {
-            enabled: !!enabled,
-            message: message || "System is under maintenance. Please try again later.",
-            updatedAt: new Date().toISOString(),
-            updatedBy: req.user.username
-          }
-        })
-        .onConflictDoUpdate({
-          target: settings.key,
-          set: {
-            value: {
-              enabled: !!enabled,
-              message: message || "System is under maintenance. Please try again later.",
-              updatedAt: new Date().toISOString(),
-              updatedBy: req.user.username
-            }
-          }
-        });
+          // Update or create the maintenance mode setting
+          await db
+            .insert(settings)
+            .values({
+              key: 'maintenance_mode',
+              value: {
+                enabled: !!enabled,
+                message: message || "System is under maintenance. Please try again later.",
+                updatedAt: new Date().toISOString(),
+                updatedBy: req.user.username
+              }
+            })
+            .onConflictDoUpdate({
+              target: settings.key,
+              set: {
+                value: {
+                  enabled: !!enabled,
+                  message: message || "System is under maintenance. Please try again later.",
+                  updatedAt: new Date().toISOString(),
+                  updatedBy: req.user.username
+                }
+              }
+            });
 
-      res.json({ success: true, enabled });
-    } catch (error) {
-      console.error('Maintenance mode update error:', error);
-      res.status(500).json({
-        message: "Failed to update maintenance mode",
-        error: error instanceof Error ? error.message : "Unknown error"
+          res.json({ success: true, enabled });
+        } catch (error) {
+          console.error('Maintenance mode update error:', error);
+          res.status(500).json({
+            message: "Failed to update maintenance mode",
+            error: error instanceof Error ? error.message : "Unknown error"
+          });
+        }
       });
-    }
-  });
 
-  // Get maintenance mode status
-  app.get("/api/maintenance", async (req, res) => {
-    try {
-      const [maintenanceSettings] = await db
-        .select()
-        .from(settings)
-        .where(eq(settings.key, 'maintenance_mode'));
+      // Get maintenance mode status
+      app.get("/api/maintenance", async (req, res) => {
+        try {
+          const [maintenanceSettings] = await db
+            .select()
+            .from(settings)
+            .where(eq(settings.key, 'maintenance_mode'));
 
-      if (!maintenanceSettings) {
-        return res.json({ enabled: false });
-      }
+          if (!maintenanceSettings) {
+            return res.json({ enabled: false });
+          }
 
-      res.json(maintenanceSettings.value);
-    } catch (error) {
-      console.error('Error fetching maintenance mode:', error);
-      res.status(500).json({ message: "Failed to fetch maintenance mode status" });
-    }
-  });
+          res.json(maintenanceSettings.value);
+        } catch (error) {
+          console.error('Error fetching maintenance mode:', error);
+          res.status(500).json({ message: "Failed to fetch maintenance mode status" });
+        }
+      });
 
       // Get simulation logs for category performance
       const simulationLogs = await db
