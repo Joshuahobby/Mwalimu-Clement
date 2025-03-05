@@ -216,6 +216,31 @@ export const insertPaymentSchema = createInsertSchema(payments).omit({
 });
 
 export const packagePrices = {
+
+export const studySessions = pgTable("study_sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  startTime: timestamp("start_time").notNull(),
+  endTime: timestamp("end_time"),
+  duration: integer("duration"), // in minutes
+  category: text("category"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => {
+  return {
+    userIdIdx: index("study_session_user_id_idx").on(table.userId),
+    startTimeIdx: index("study_session_start_time_idx").on(table.startTime),
+  };
+});
+
+export const insertStudySessionSchema = createInsertSchema(studySessions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type StudySession = typeof studySessions.$inferSelect;
+export type InsertStudySession = z.infer<typeof insertStudySessionSchema>;
+
   single: 200,
   daily: 800,
   weekly: 4000,

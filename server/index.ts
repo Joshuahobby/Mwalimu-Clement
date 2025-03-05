@@ -32,6 +32,49 @@ app.use((req, res, next) => {
       });
       capturedJsonResponse = maskedBody;
     } else {
+
+// More detailed error handling middleware with specific error types
+const handleErrors = (err: any, req: Request, res: Response, next: NextFunction) => {
+  const status = err.status || err.statusCode || 500;
+  const message = err.message || "Internal Server Error";
+
+  // Different error types based on status code
+  const errorTypes: Record<number, string> = {
+    400: 'Bad Request',
+    401: 'Unauthorized',
+    403: 'Forbidden',
+    404: 'Not Found',
+    409: 'Conflict',
+    422: 'Validation Error',
+    429: 'Too Many Requests',
+    500: 'Internal Server Error',
+    502: 'Bad Gateway',
+    503: 'Service Unavailable'
+  };
+
+  // Log detailed error for debugging
+  console.error('Error:', {
+    type: errorTypes[status] || 'Unknown Error',
+    status,
+    message,
+    path: req.path,
+    method: req.method,
+    ip: req.ip,
+    user: req.user?.id,
+    stack: err.stack,
+    details: err.details || {}
+  });
+
+  // Send sanitized error response
+  res.status(status).json({ 
+    error: errorTypes[status] || 'Unknown Error',
+    message: status === 500 ? "Internal Server Error" : message,
+    code: status,
+    // Include request ID for tracking in logs
+    requestId: req.headers['x-request-id'] || Date.now().toString(36)
+  });
+};
+
       capturedJsonResponse = bodyJson;
     }
     return originalResJson.apply(res, [bodyJson, ...args]);
@@ -66,25 +109,8 @@ app.use((req, res, next) => {
 
   const server = await registerRoutes(app);
 
-  // Global error handler with proper error response formatting
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    // Log error details but send limited info to client
-    console.error('Error:', {
-      status,
-      message,
-      stack: err.stack,
-      details: err.details || {}
-    });
-
-    // Send sanitized error response
-    res.status(status).json({ 
-      message: status === 500 ? "Internal Server Error" : message,
-      code: status
-    });
-  });
+  // Use the enhanced error handler
+  app.use(handleErrors);
 
   if (app.get("env") === "development") {
     await setupVite(app, server);

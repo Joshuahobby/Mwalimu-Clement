@@ -375,12 +375,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return res.status(400).json({ message: "Exam already completed" });
         }
 
-        // Get questions for the exam using proper PostgreSQL array syntax
+        // Get questions for the exam with proper type handling
         const examQuestions = await db
             .select()
             .from(questions)
-            .where(sql`id = ANY(${exam.questions}::int[])`)
-            .orderBy(sql`array_position(${exam.questions}::int[], id)`);
+            .where(sql`id = ANY(${JSON.stringify(exam.questions)}::int[])`)
+            .orderBy(sql`array_position(${JSON.stringify(exam.questions)}::int[], id)`);
 
         // Calculate correct answers
         const correctCount = examQuestions.reduce((count, question, index) => {
@@ -671,6 +671,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     createdAt: new Date(),
                     status: "completed",
                     username: req.user.username,
+
+  // Detailed user analytics endpoint
+  app.get("/api/user/analytics", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      // Get all exam simulations completed by the user
+      const userSimulations = await db
+        .select({
+          simulation: examSimulations,
+          logs: sql<number>`COUNT(${examSimulationLogs.id})::int`,
+          correctCount: sql<number>`SUM(CASE WHEN ${examSimulationLogs.isCorrect} THEN 1 ELSE 0 END)::int`
+        })
+        .from(examSimulations)
+        .leftJoin(examSimulationLogs, eq(examSimulations.id, examSimulationLogs.simulationId))
+        .where(eq(examSimulations.userId, req.user.id))
+        .groupBy(examSimulations.id)
+        .orderBy(desc(examSimulations.startTime));
+
+      // Calculate improvement over time
+      const simulationResults = userSimulations.map(({ simulation, logs, correctCount }) => {
+        const accuracy = logs > 0 ? Math.round((correctCount / logs) * 100) : 0;
+        
+        return {
+          id: simulation.id,
+          date: simulation.startTime,
+          accuracy,
+          questionsAttempted: logs,
+          timeSpent: simulation.endTime ? 
+            Math.round((new Date(simulation.endTime).getTime() - new Date(simulation.startTime).getTime()) / 60000) : 
+            0
+        };
+      });
+
+      // Calculate time-based trends
+      const weeklyTrends = [];
+      const now = new Date();
+      
+      for (let i = 4; i >= 0; i--) {
+        const weekStart = new Date(now);
+        weekStart.setDate(now.getDate() - (i * 7 + 7));
+        
+        const weekEnd = new Date(now);
+        weekEnd.setDate(now.getDate() - (i * 7));
+        
+        const weekSimulations = simulationResults.filter(
+          sim => new Date(sim.date) >= weekStart && new Date(sim.date) < weekEnd
+        );
+        
+        const avgAccuracy = weekSimulations.length > 0 
+          ? Math.round(weekSimulations.reduce((sum, sim) => sum + sim.accuracy, 0) / weekSimulations.length) 
+          : 0;
+        
+        weeklyTrends.push({
+          weekOf: weekStart.toISOString().split('T')[0],
+          simulations: weekSimulations.length,
+          avgAccuracy,
+          totalQuestions: weekSimulations.reduce((sum, sim) => sum + sim.questionsAttempted, 0)
+        });
+      }
+
+      // Identify improvement areas
+      const improvementAreas = [];
+      
+      // Get category performance from logs for the last 30 days
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const categoryPerformance = await db
+        .select({
+          category: questions.category,
+          total: sql<number>`COUNT(*)::int`,
+          correct: sql<number>`SUM(CASE WHEN ${examSimulationLogs.isCorrect} THEN 1 ELSE 0 END)::int`
+        })
+        .from(examSimulationLogs)
+        .leftJoin(questions, eq(examSimulationLogs.questionId, questions.id))
+        .where(
+          and(
+            eq(examSimulationLogs.userId, req.user.id),
+            sql`${examSimulationLogs.timestamp} > ${thirtyDaysAgo}`
+          )
+        )
+        .groupBy(questions.category);
+      
+      categoryPerformance.forEach(cat => {
+        const accuracy = cat.total > 0 ? Math.round((cat.correct / cat.total) * 100) : 0;
+        if (accuracy < 70) {
+          improvementAreas.push({
+            category: cat.category,
+            accuracy,
+            totalQuestions: cat.total
+          });
+        }
+      });
+
+      res.json({
+        simulationResults,
+        weeklyTrends,
+        improvementAreas,
+        recommendedStudyCategories: improvementAreas
+          .sort((a, b) => a.accuracy - b.accuracy)
+          .slice(0, 3)
+          .map(area => area.category)
+      });
+    } catch (error) {
+      console.error('Error fetching user analytics:', error);
+      res.status(500).json({
+        message: "Failed to fetch analytics data",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
                     metadata: {
                       tx_ref: String(tx_ref),
                       transaction_id: String(transaction_id),
@@ -884,6 +997,128 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+
+  // Study session management
+  app.post("/api/study/sessions", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const { category } = req.body;
+      
+      const [session] = await db
+        .insert(studySessions)
+        .values({
+          userId: req.user.id,
+          startTime: new Date(),
+          category
+        })
+        .returning();
+
+      res.status(201).json(session);
+    } catch (error) {
+      console.error('Error creating study session:', error);
+      res.status(500).json({
+        message: "Failed to create study session",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.patch("/api/study/sessions/:id/end", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const sessionId = parseInt(req.params.id);
+      const { notes } = req.body;
+      
+      const [session] = await db
+        .select()
+        .from(studySessions)
+        .where(
+          and(
+            eq(studySessions.id, sessionId),
+            eq(studySessions.userId, req.user.id)
+          )
+        );
+
+      if (!session) {
+        return res.status(404).json({ message: "Study session not found" });
+      }
+
+      if (session.endTime) {
+        return res.status(400).json({ message: "Session already ended" });
+      }
+
+      const endTime = new Date();
+      const duration = Math.ceil((endTime.getTime() - new Date(session.startTime).getTime()) / 60000);
+
+      const [updatedSession] = await db
+        .update(studySessions)
+        .set({
+          endTime,
+          duration,
+          notes: notes || null
+        })
+        .where(eq(studySessions.id, sessionId))
+        .returning();
+
+      res.json(updatedSession);
+    } catch (error) {
+      console.error('Error ending study session:', error);
+      res.status(500).json({
+        message: "Failed to end study session",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/study/sessions", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const sessions = await db
+        .select()
+        .from(studySessions)
+        .where(eq(studySessions.userId, req.user.id))
+        .orderBy(desc(studySessions.startTime));
+
+      const totalStudyTime = sessions.reduce((total, session) => {
+        return total + (session.duration || 0);
+      }, 0);
+
+      const categorySummary = sessions.reduce((acc, session) => {
+        if (!session.category) return acc;
+        
+        if (!acc[session.category]) {
+          acc[session.category] = {
+            totalTime: 0,
+            sessionCount: 0
+          };
+        }
+        
+        acc[session.category].totalTime += session.duration || 0;
+        acc[session.category].sessionCount += 1;
+        
+        return acc;
+      }, {} as Record<string, { totalTime: number, sessionCount: number }>);
+
+      res.json({
+        sessions,
+        summary: {
+          totalSessions: sessions.length,
+          totalStudyTime,
+          categorySummary
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching study sessions:', error);
+      res.status(500).json({
+        message: "Failed to fetch study sessions",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   app.get("/api/payments/history", async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -911,6 +1146,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .select()
         .from(payments)
         .where(
+
+  // Maintenance mode toggle
+  app.post("/api/admin/maintenance", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user.isAdmin) return res.sendStatus(403);
+
+    try {
+      const { enabled, message } = req.body;
+      
+      // Update or create the maintenance mode setting
+      await db
+        .insert(settings)
+        .values({
+          key: 'maintenance_mode',
+          value: {
+            enabled: !!enabled,
+            message: message || "System is under maintenance. Please try again later.",
+            updatedAt: new Date().toISOString(),
+            updatedBy: req.user.username
+          }
+        })
+        .onConflictDoUpdate({
+          target: settings.key,
+          set: {
+            value: {
+              enabled: !!enabled,
+              message: message || "System is under maintenance. Please try again later.",
+              updatedAt: new Date().toISOString(),
+              updatedBy: req.user.username
+            }
+          }
+        });
+
+      res.json({ success: true, enabled });
+    } catch (error) {
+      console.error('Maintenance mode update error:', error);
+      res.status(500).json({
+        message: "Failed to update maintenance mode",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Get maintenance mode status
+  app.get("/api/maintenance", async (req, res) => {
+    try {
+      const [maintenanceSettings] = await db
+        .select()
+        .from(settings)
+        .where(eq(settings.key, 'maintenance_mode'));
+
+      if (!maintenanceSettings) {
+        return res.json({ enabled: false });
+      }
+
+      res.json(maintenanceSettings.value);
+    } catch (error) {
+      console.error('Error fetching maintenance mode:', error);
+      res.status(500).json({ message: "Failed to fetch maintenance mode status" });
+    }
+  });
+
           and(
             eq(payments.userId, req.user.id),
             eq(payments.status, "completed"),
