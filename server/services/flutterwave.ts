@@ -144,7 +144,12 @@ export async function verifyPayment(tx_ref: string): Promise<VerificationRespons
   try {
     console.log(`Verifying payment with reference: ${tx_ref}`);
 
+    if (!tx_ref || tx_ref.trim() === '') {
+      throw new Error("Transaction reference is empty or invalid");
+    }
+
     // Make API request to Flutterwave
+    console.log(`Making API request to ${BASE_URL}/transactions/verify_by_reference?tx_ref=${tx_ref}`);
     const response = await axios.get(`${BASE_URL}/transactions/verify_by_reference?tx_ref=${tx_ref}`, {
       headers: {
         Authorization: `Bearer ${FLUTTERWAVE_SECRET_KEY}`,
@@ -210,10 +215,17 @@ export async function verifyPayment(tx_ref: string): Promise<VerificationRespons
           message: "Transaction reference not found"
         };
       }
-
-      throw new Error(`Verification error: ${error.response?.data?.message || error.message}`);
+      
+      return {
+        status: "failed",
+        message: `Verification error: ${error.response?.data?.message || error.message}`
+      };
     }
-    throw error;
+    
+    return {
+      status: "failed",
+      message: error instanceof Error ? error.message : "Unknown verification error"
+    };
   }
 }
 

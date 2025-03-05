@@ -90,7 +90,7 @@ export default function HomePage() {
         variant: "destructive",
       });
     }
-  }, [location, toast]);
+  }, [params, toast]);
 
   const { data: activePayment, isLoading: paymentLoading } = useQuery({
     queryKey: ['/api/payments/active'],
@@ -188,42 +188,54 @@ export default function HomePage() {
 
     const checkPaymentStatus = async () => {
       try {
-        const response = await apiRequest('GET', `/api/payments/active`);
+        const response = await apiRequest('GET', `/api/payments/status?tx_ref=${tx_ref}`);
 
         if (response.ok) {
-          // Payment is successful and active
-          const payment = await response.json();
-          toast({
-            title: "Payment Successful",
-            description: `Your ${payment.packageType} package is now active until ${new Date(payment.validUntil).toLocaleString()}`,
-            variant: "default",
-            duration: 5000,
-          });
+          const data = await response.json();
 
-          // Clear URL parameters
-          window.history.replaceState({}, document.title, window.location.pathname);
+          if (data.payment && data.payment.status === 'completed') {
+            clearInterval(pollingInterval);
+            // Payment is active, show success message
+            toast({
+              title: "Payment Successful",
+              description: "Your payment has been processed successfully!",
+              variant: "default",
+            });
 
-          // Invalidate queries to refresh data
-          queryClient.invalidateQueries({ queryKey: ["/api/payments/active"] });
+            // Remove tx_ref from URL
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, document.title, newUrl);
+            return;
+          }
 
-          // Stop polling
-          clearInterval(pollingInterval);
-        } else if (attempts >= maxAttempts) {
-          // Stop polling after max attempts
-          clearInterval(pollingInterval);
+          if (data.transaction && data.transaction.status === 'successful') {
+            clearInterval(pollingInterval);
+            // Transaction is verified but payment record needs updating
+            toast({
+              title: "Payment Verified",
+              description: "Your payment has been verified!",
+              variant: "default",
+            });
 
-          // Prompt user to try manually refreshing
-          toast({
-            title: "Payment Status Unknown",
-            description: "We couldn't confirm your payment status. Please refresh the page or check 'My Account'.",
-            variant: "destructive",
-            duration: 10000,
-          });
+            // Refresh the page to get updated state
+            window.location.href = '/';
+            return;
+          }
         }
 
+        // Continue polling until max attempts reached
         attempts++;
+        if (attempts >= maxAttempts) {
+          clearInterval(pollingInterval);
+          toast({
+            title: "Payment Verification Timeout",
+            description: "We couldn't verify your payment. Please check your payment status in your account.",
+            variant: "destructive",
+          });
+        }
       } catch (error) {
         console.error("Error checking payment status:", error);
+        attempts++;
       }
     };
 
@@ -232,7 +244,7 @@ export default function HomePage() {
 
     // Clean up interval on component unmount
     return () => clearInterval(pollingInterval);
-  }, [location, toast]);
+  }, [params, toast]);
 
 
   const paymentMethods = [

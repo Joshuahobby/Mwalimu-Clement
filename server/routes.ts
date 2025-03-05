@@ -501,19 +501,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: transaction.status
           });
 
-          // First find the pending payment
+          // First find the payment, regardless of status
           const [pendingPayment] = await db
             .select()
             .from(payments)
             .where(
-              and(
-                eq(payments.status, "pending"),
-                sql`payments.metadata->>'tx_ref' = ${tx_ref}`
-              )
+              sql`payments.metadata->>'tx_ref' = ${tx_ref}`
             );
 
           if (!pendingPayment) {
-            console.error('No pending payment found for tx_ref:', tx_ref);
+            console.error('No payment found for tx_ref:', tx_ref);
+            
+            // Create a payment record for this transaction if it doesn't exist
+            if (req.isAuthenticated() && req.user.id) {
+              console.log('Creating payment record for transaction:', tx_ref);
+              
+              // Default package type and validity
+              const packageType = "single";
+              let validUntil = new Date();
+              validUntil.setHours(validUntil.getHours() + 1);
+              
+              try {
+                const [newPayment] = await db
+                  .insert(payments)
+                  .values({
+                    userId: req.user.id,
+                    amount: transaction.amountPaid || 200,
+                    packageType,
+                    validUntil,
+                    status: "completed",
+                    username: req.user.username,
+                    metadata: {
+                      tx_ref,
+                      transaction_id,
+                      payment_method: transaction.paymentMethod || 'mobilemoney',
+                      created_at: new Date().toISOString(),
+                      verified_at: new Date().toISOString(),
+                      verification_method: 'redirect_recovery'
+                    }
+                  })
+                  .returning();
+                  
+                console.log('Created payment record for missing transaction:', newPayment);
+                return res.redirect(`/?payment=success&tx_ref=${tx_ref}&recovered=true`);
+              } catch (createError) {
+                console.error('Error creating payment record:', createError);
+              }
+            }
+            
             return res.redirect('/?error=payment_not_found&tx_ref=' + encodeURIComponent(tx_ref as string));
           }
 
