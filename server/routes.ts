@@ -2,13 +2,22 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertQuestionSchema, packagePrices, payments } from "@shared/schema";
+import { 
+  insertQuestionSchema, 
+  packagePrices, 
+  payments, 
+  insertCustomPackageSchema,
+  customPackages,
+  exams,
+  questions,
+  examSimulations,
+  examSimulationLogs
+} from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { initiatePayment, verifyPayment, verifyWebhookSignature } from "./services/flutterwave";
 import { updateProfileSchema } from "@shared/schema"; 
 import { users } from "@shared/schema"; 
-import { examSimulations, examSimulationLogs, questions, exams, customPackages } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -354,37 +363,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Exam already completed" });
       }
 
-      // Get questions using proper array syntax for Postgres
+      // Get questions for the exam
       const examQuestions = await db
         .select()
         .from(questions)
-        .where(sql`id = ANY(${exam.questions})`)
+        .where(sql`id = ANY(${exam.questions}::int[])`)
         .orderBy(sql`array_position(${exam.questions}::int[], id)`);
 
       // Calculate correct answers
-      const correctAnswers = examQuestions.reduce((count, question, index) => {
+      const correctCount = examQuestions.reduce((count, question, index) => {
         return count + (req.body.answers[index] === question.correctAnswer ? 1 : 0);
       }, 0);
 
       // Calculate score (percentage)
-      const score = (correctAnswers / examQuestions.length) * 100;
+      const score = (correctCount / examQuestions.length) * 100;
 
-      // Update exam with answers, score, and end time
+      // Update exam with answers and score
       const [updatedExam] = await db
         .update(exams)
         .set({
           answers: req.body.answers,
           score,
-          endTime: new Date(),
-          correctAnswers
+          endTime: new Date()
         })
         .where(eq(exams.id, examId))
         .returning();
 
       console.log('Exam completed:', {
         id: updatedExam.id,
-        score: updatedExam.score,
-        correctAnswers
+        score: updatedExam.score
       });
 
       res.json(updatedExam);
@@ -465,7 +472,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         default: return res.status(400).json({ message: "Invalid package type" });
       }
 
-      if (!req.user.email) {
+      if (!req.user.email?.trim()) {
         return res.status(400).json({ 
           message: "Email is required for payment. Please update your profile with a valid email address.",
           code: "EMAIL_REQUIRED"
@@ -631,41 +638,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           if (!pendingPayment) {
             console.error('No payment found for tx_ref:', tx_ref);
-            
 
             // Create a payment record for this transaction if it doesn't exist
             if (req.isAuthenticated() && req.user.id) {
               console.log('Creating payment record for transaction:', tx_ref);
-              
 
               // Default package type and validity
               const packageType = "single";
               let validUntil = new Date();
               validUntil.setHours(validUntil.getHours() + 1);
-              
 
               try {
                 const [newPayment] = await db
                   .insert(payments)
                   .values({
                     userId: req.user.id,
-                    amount: transaction.amountPaid || 200,
+                    amount: transaction.amount || 200,
                     packageType,
                     validUntil,
-                    createdAt: new Date(), // Add explicit createdAt
+                    createdAt: new Date(),
                     status: "completed",
                     username: req.user.username,
                     metadata: {
-                      tx_ref,
-                      transaction_id,
+                      tx_ref: String(tx_ref),
+                      transaction_id: String(transaction_id),
                       payment_method: transaction.paymentMethod || 'mobilemoney',
                       created_at: new Date().toISOString(),
                       verified_at: new Date().toISOString(),
                       verification_method: 'redirect_recovery'
                     }
-                  })
+                  } as typeof payments.$inferInsert)
                   .returning();
-                  
 
                 console.log('Created payment record for missing transaction:', newPayment);
                 return res.redirect(`/?payment=success&tx_ref=${tx_ref}&recovered=true`);
@@ -673,7 +676,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 console.error('Error creating payment record:', createError);
               }
             }
-            
 
             return res.redirect('/?error=payment_not_found&tx_ref=' + encodeURIComponent(tx_ref as string));
           }
@@ -886,7 +888,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch payment history" });
     }
   });
-  
+
 
   app.get("/api/user/progress", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -1093,7 +1095,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       } catch (verifyError) {
         console.error('Verification error for tx_ref:', tx_ref, verifyError);
-        
 
         // Return a more graceful response instead of letting the error propagate
         res.json({

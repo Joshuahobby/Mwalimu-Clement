@@ -92,7 +92,7 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  const port = 3000;
+  const port = 5000; // Changed from 3000 to 5000
   server.listen({
     port,
     host: "0.0.0.0",
