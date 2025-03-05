@@ -216,6 +216,11 @@ export const insertPaymentSchema = createInsertSchema(payments).omit({
 });
 
 export const packagePrices = {
+  single: 200,
+  daily: 800,
+  weekly: 4000,
+  monthly: 10000,
+} as const;
 
 export const studySessions = pgTable("study_sessions", {
   id: serial("id").primaryKey(),
