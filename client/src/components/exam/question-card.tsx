@@ -10,16 +10,19 @@ interface QuestionCardProps {
 }
 
 export default function QuestionCard({ question, selectedAnswer, onAnswer }: QuestionCardProps) {
+  // Convert selectedAnswer to string safely, defaulting to '-1' if undefined
+  const selectedValue = String(selectedAnswer ?? -1);
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>{question.question}</CardTitle>
       </CardHeader>
       <CardContent>
-        <RadioGroup value={selectedAnswer.toString()} onValueChange={(value) => onAnswer(parseInt(value))}>
+        <RadioGroup value={selectedValue} onValueChange={(value) => onAnswer(parseInt(value))}>
           {question.options.map((option, index) => (
             <div key={index} className="flex items-center space-x-2">
-              <RadioGroupItem value={index.toString()} id={`option-${index}`} />
+              <RadioGroupItem value={String(index)} id={`option-${index}`} />
               <Label htmlFor={`option-${index}`}>{option}</Label>
             </div>
           ))}
