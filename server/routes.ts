@@ -8,6 +8,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { initiatePayment, verifyPayment, verifyWebhookSignature } from "./services/flutterwave";
 import { updateProfileSchema } from "@shared/schema"; 
 import { users } from "@shared/schema"; 
+import { examSimulations, examSimulationLogs, questions, exams, customPackages } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -822,7 +823,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // User Progress API endpoint
+
   app.get("/api/user/progress", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
@@ -841,6 +842,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .orderBy(desc(payments.createdAt))
         .limit(1);
 
+      // Get simulation logs for category performance
+      const simulationLogs = await db
+        .select({
+          simulationLog: examSimulationLogs,
+          question: questions
+        })
+        .from(examSimulationLogs)
+        .leftJoin(questions, eq(examSimulationLogs.questionId, questions.id))
+        .where(eq(examSimulationLogs.userId, req.user.id));
+
       // Get completed exams
       const userExams = await db
         .select()
@@ -852,32 +863,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           )
         )
         .orderBy(desc(exams.startTime));
-
-      // Get simulation logs for category performance
-      const simulationLogs = await db
-        .select({
-          simulationLog: examSimulationLogs,
-          question: questions
-        })
-        .from(examSimulationLogs)
-        .leftJoin(questions, eq(examSimulationLogs.questionId, questions.id))
-        .where(eq(examSimulationLogs.userId, req.user.id));
-
-      // Process exam results
-      const recentExams = userExams.slice(0, 5).map(exam => ({
-        id: exam.id,
-        score: exam.score || 0,
-        startTime: exam.startTime.toISOString(),
-        endTime: exam.endTime?.toISOString() || new Date().toISOString(),
-        questionCount: exam.questions.length,
-      }));
-
-      const totalExams = userExams.length;
-      const avgScore = userExams.length > 0 
-        ? userExams.reduce((sum, exam) => sum + (exam.score || 0), 0) / userExams.length
-        : 0;
-      const passCount = userExams.filter(exam => (exam.score || 0) >= 70).length;
-      const passRate = totalExams > 0 ? (passCount / totalExams) * 100 : 0;
 
       // Process category performance
       const categoryStats: Record<string, { correct: number, total: number }> = {};
@@ -901,39 +886,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
         percentage: Math.round((stats.correct / stats.total) * 100)
       }));
 
-      // Generate weekly activity data
+      // Find strongest and weakest categories
+      const sortedCategories = [...categoryPerformance].sort((a, b) => b.percentage - a.percentage);
+      const strongestCategory = sortedCategories[0]?.category;
+      const weakestCategory = sortedCategories[sortedCategories.length - 1]?.category;
+
+      // Calculate study streak
       const today = new Date();
+      let streak = 0;
+      let currentDate = today;
+      const dailyActivity = new Set();
+
+      simulationLogs.forEach(log => {
+        if (log.simulationLog) {
+          const date = new Date(log.simulationLog.timestamp).toDateString();
+          dailyActivity.add(date);
+        }
+      });
+
+      while (dailyActivity.has(currentDate.toDateString())) {
+        streak++;
+        currentDate.setDate(currentDate.getDate() - 1);
+      }
+
+      // Calculate next milestone
+      const totalQuestions = simulationLogs.length;
+      const nextMilestone = {
+        type: 'questions',
+        value: Math.ceil(totalQuestions / 50) * 50 + 50,
+        current: totalQuestions
+      };
+
+      // Generate weekly activity data
       const weeklyActivity = [];
       for (let i = 6; i >= 0; i--) {
         const date = new Date(today);
         date.setDate(date.getDate() - i);
         const dateString = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        
-        // Count questions attempted on this day
+
         const dayQuestions = simulationLogs.filter(log => {
           const logDate = new Date(log.simulationLog.timestamp);
           return logDate.toDateString() === date.toDateString();
         }).length;
-        
+
         weeklyActivity.push({
           date: dateString,
           questions: dayQuestions
         });
       }
 
-      // Calculate total questions from payment journey or logs
-      const totalQuestions = activePayment?.metadata?.journey?.total_questions_attempted || 
-        simulationLogs.length;
-
       const progressData = {
-        totalExams,
-        avgScore,
-        passRate,
-        totalQuestions,
-        journey: activePayment?.metadata?.journey,
-        recentExams,
+        totalExams: userExams.length,
+        avgScore: userExams.length > 0 
+          ? userExams.reduce((sum, exam) => sum + (exam.score || 0), 0) / userExams.length
+          : 0,
+        passRate: userExams.length > 0 
+          ? (userExams.filter(exam => (exam.score || 0) >= 70).length / userExams.length) * 100 
+          : 0,
+        totalQuestions: simulationLogs.length,
+        timeSpentMinutes: activePayment?.metadata?.journey?.time_spent_minutes || 0,
+        recentExams: userExams.slice(0, 5).map(exam => ({
+          id: exam.id,
+          score: exam.score || 0,
+          startTime: exam.startTime.toISOString(),
+          endTime: exam.endTime?.toISOString() || new Date().toISOString(),
+          questionCount: exam.questions.length,
+          correctAnswers: exam.correctAnswers || 0,
+        })),
         categoryPerformance,
-        weeklyActivity
+        weeklyActivity,
+        strongestCategory,
+        weakestCategory,
+        studyStreak: streak,
+        nextMilestone
       };
 
       res.json(progressData);

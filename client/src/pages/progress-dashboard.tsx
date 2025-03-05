@@ -43,6 +43,13 @@ interface UserProgress {
   weeklyActivity: WeeklyActivity[];
   strongestCategory?: string;
   weakestCategory?: string;
+  recommendedTopics?: string[];
+  studyStreak?: number;
+  nextMilestone?: {
+    type: string;
+    value: number;
+    current: number;
+  };
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
@@ -275,9 +282,12 @@ export default function ProgressDashboard() {
           {progressStats.categoryPerformance.length > 0 ? (
             <div className="space-y-6">
               <div>
-                <h3 className="font-semibold mb-2">Strengths</h3>
+                <h3 className="font-semibold mb-2">Your Strengths</h3>
                 <p className="text-green-600">
-                  You're performing well in {progressStats.strongestCategory || progressStats.categoryPerformance[0].category}
+                  You're performing well in {progressStats.strongestCategory || progressStats.categoryPerformance[0].category} (
+                  {Math.round(progressStats.categoryPerformance.find(
+                    cat => cat.category === (progressStats.strongestCategory || progressStats.categoryPerformance[0].category)
+                  )?.percentage || 0)}%)
                 </p>
               </div>
 
@@ -286,26 +296,62 @@ export default function ProgressDashboard() {
                 <div className="space-y-2">
                   {progressStats.categoryPerformance
                     .filter(cat => cat.percentage < 70)
+                    .sort((a, b) => a.percentage - b.percentage)
                     .slice(0, 3)
                     .map(category => (
-                      <div key={category.category} className="flex items-center">
-                        <div className="w-3 h-3 rounded-full bg-orange-500 mr-2"></div>
-                        <span>{category.category}: {category.percentage}% correct</span>
+                      <div key={category.category} className="bg-orange-50 p-3 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center">
+                            <div className="w-3 h-3 rounded-full bg-orange-500 mr-2"></div>
+                            <span className="font-medium">{category.category}</span>
+                          </div>
+                          <span className="text-sm text-orange-700">{category.percentage}% correct</span>
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          Completed {category.totalCount} questions, {category.correctCount} correct
+                        </div>
                       </div>
                     ))}
                 </div>
               </div>
 
-              <div className="pt-4">
-                <Button onClick={() => navigate("/exam")} className="w-full">
+              {progressStats.studyStreak && (
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h3 className="font-semibold mb-2">Study Streak</h3>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-blue-500" />
+                    <span>{progressStats.studyStreak} days in a row!</span>
+                  </div>
+                  {progressStats.nextMilestone && (
+                    <div className="mt-2 text-sm text-blue-600">
+                      {progressStats.nextMilestone.value - progressStats.nextMilestone.current} more questions to reach your next milestone!
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-4 pt-4">
+                <Button 
+                  onClick={() => navigate("/exam")} 
+                  className="w-full bg-gradient-to-r from-primary to-primary/80"
+                >
                   Start Targeted Practice
                 </Button>
+
+                <div className="text-sm text-muted-foreground text-center">
+                  Focus on {progressStats.weakestCategory} to improve your overall performance
+                </div>
               </div>
             </div>
           ) : (
-            <p className="text-center text-muted-foreground">
-              Complete more questions to receive personalized recommendations
-            </p>
+            <div className="text-center space-y-4">
+              <p className="text-muted-foreground">
+                Complete more questions to receive personalized recommendations
+              </p>
+              <Button onClick={() => navigate("/exam")} variant="outline">
+                Take Your First Exam
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>
