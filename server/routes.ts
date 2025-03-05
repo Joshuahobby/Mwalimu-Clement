@@ -331,11 +331,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/exams/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    const exam = await storage.getExam(parseInt(req.params.id));
-    if (!exam || exam.userId !== req.user.id) return res.sendStatus(403);
 
-    const updatedExam = await storage.updateExam(exam.id, req.body);
-    res.json(updatedExam);
+    try {
+      const examId = parseInt(req.params.id);
+
+      // Get the exam and verify ownership
+      const [exam] = await db
+        .select()
+        .from(exams)
+        .where(
+          and(
+            eq(exams.id, examId),
+            eq(exams.userId, req.user.id)
+          )
+        );
+
+      if (!exam) {
+        return res.status(404).json({ message: "Exam not found" });
+      }
+
+      if (exam.endTime) {
+        return res.status(400).json({ message: "Exam already completed" });
+      }
+
+      // Get questions to calculate score
+      const examQuestions = await db
+        .select()
+        .from(questions)
+        .where(sql`id = ANY(${exam.questions})`);
+
+      // Calculate correct answers
+      const correctAnswers = examQuestions.reduce((count, question, index) => {
+        return count + (req.body.answers[index] === question.correctAnswer ? 1 : 0);
+      }, 0);
+
+      // Calculate score (percentage)
+      const score = (correctAnswers / examQuestions.length) * 100;
+
+      // Update exam with answers, score, and end time
+      const [updatedExam] = await db
+        .update(exams)
+        .set({
+          answers: req.body.answers,
+          score,
+          endTime: new Date(),
+          correctAnswers // Add this field to track correct answers
+        })
+        .where(eq(exams.id, examId))
+        .returning();
+
+      console.log('Exam completed:', {
+        id: updatedExam.id,
+        score: updatedExam.score,
+        correctAnswers
+      });
+
+      res.json(updatedExam);
+    } catch (error) {
+      console.error('Error updating exam:', error);
+      res.status(500).json({ 
+        message: "Failed to update exam",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
   });
 
   // Admin Package Management Routes
@@ -573,15 +631,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (!pendingPayment) {
             console.error('No payment found for tx_ref:', tx_ref);
             
+
             // Create a payment record for this transaction if it doesn't exist
             if (req.isAuthenticated() && req.user.id) {
               console.log('Creating payment record for transaction:', tx_ref);
               
+
               // Default package type and validity
               const packageType = "single";
               let validUntil = new Date();
               validUntil.setHours(validUntil.getHours() + 1);
               
+
               try {
                 const [newPayment] = await db
                   .insert(payments)
@@ -604,6 +665,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   })
                   .returning();
                   
+
                 console.log('Created payment record for missing transaction:', newPayment);
                 return res.redirect(`/?payment=success&tx_ref=${tx_ref}&recovered=true`);
               } catch (createError) {
@@ -611,6 +673,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             }
             
+
             return res.redirect('/?error=payment_not_found&tx_ref=' + encodeURIComponent(tx_ref as string));
           }
 
@@ -1030,6 +1093,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (verifyError) {
         console.error('Verification error for tx_ref:', tx_ref, verifyError);
         
+
         // Return a more graceful response instead of letting the error propagate
         res.json({
           payment: paymentRecord || null,
