@@ -363,12 +363,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return res.status(400).json({ message: "Exam already completed" });
         }
 
-        // Get questions for the exam using proper array casting
+        // Get questions for the exam using proper PostgreSQL array syntax
         const examQuestions = await db
             .select()
             .from(questions)
-            .where(sql`id = ANY(${sql.array(exam.questions, 'int4')})`)
-            .orderBy(sql`array_position(${sql.array(exam.questions, 'int4')}, id)`);
+            .where(sql`id = ANY(${exam.questions}::int[])`)
+            .orderBy(sql`array_position(${exam.questions}::int[], id)`);
 
         // Calculate correct answers
         const correctCount = examQuestions.reduce((count, question, index) => {
@@ -376,7 +376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }, 0);
 
         // Calculate score (percentage)
-        const score = (correctCount / examQuestions.length) * 100;
+        const score = Math.round((correctCount / examQuestions.length) * 100);
 
         // Update exam with answers and score
         const [updatedExam] = await db
@@ -402,7 +402,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             error: error instanceof Error ? error.message : "Unknown error"
         });
     }
-});
+  });
 
   // Admin Package Management Routes
   app.get("/api/admin/packages", async (req, res) => {
@@ -957,7 +957,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const strongestCategory = sortedCategories[0]?.category;const weakestCategory = sortedCategories[sortedCategories.length - 1]?.category;
 
       // Calculate study streak
-      const today = new Date();
+      const today = newDate();
       let streak = 0;
       let currentDate = today;
       const dailyActivity = new Set();
