@@ -4,8 +4,8 @@ import { Payment, packagePrices } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
-import { useLocation } from "wouter";
+import { useQueryClient } from '@tanstack/react-query';
+import { useLocation, useQueryParams } from "wouter";
 import { Clock, CalendarDays, CreditCard, BookOpen, Wallet, Building } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -25,11 +25,35 @@ interface PaymentResponse {
 type PaymentMethod = 'card' | 'mobilemoney' | 'banktransfer';
 
 export default function HomePage() {
+  const queryClient = useQueryClient();
   const { user, logoutMutation } = useAuth();
   const { toast } = useToast();
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
+  const params = useQueryParams();
   const [selectedPackage, setSelectedPackage] = useState<keyof typeof packagePrices | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Check for payment success parameter
+  useEffect(() => {
+    // Check for payment success in URL parameters
+    const paymentStatus = params.get('payment');
+    const txRef = params.get('tx_ref');
+
+    if (paymentStatus === 'success' && txRef) {
+      toast({
+        title: "Payment Successful!",
+        description: "Your subscription has been activated. You can now access your exams.",
+        variant: "default",
+        duration: 5000,
+      });
+
+      // Fetch active payment to update UI
+      queryClient.invalidateQueries(['/api/payments/active']);
+
+      // Clean URL parameters without refreshing the page
+      window.history.replaceState({}, document.title, '/');
+    }
+  }, [params, toast, queryClient]);
 
   // Handle payment status messages
   useEffect(() => {
@@ -67,9 +91,12 @@ export default function HomePage() {
     }
   }, [location, toast]);
 
-  const { data: activePayment, isLoading: paymentLoading } = useQuery<Payment>({
-    queryKey: ["/api/payments/active"],
-    retry: false,
+  const { data: activePayment, isLoading: paymentLoading } = useQuery({
+    queryKey: ['/api/payments/active'],
+    enabled: !!user,
+    retry: 2,
+    // Don't show error notifications for missing subscription
+    onError: () => {}
   });
 
   const handlePayment = async (packageType: keyof typeof packagePrices, paymentMethod: PaymentMethod) => {
@@ -262,6 +289,12 @@ export default function HomePage() {
     },
   ];
 
+  // Query for getting questions data
+  const { data: questions, isLoading: questionsLoading } = useQuery<Question[]>({
+    queryKey: ['/api/questions'],
+    enabled: !!user,
+  });
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
@@ -277,6 +310,30 @@ export default function HomePage() {
       </header>
 
       <main className="container mx-auto px-4 py-8">
+        {/* Active Subscription Banner */}
+        {activePayment && (
+          <Card className="mb-6 bg-green-50 border-green-200">
+            <CardContent className="pt-6">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-semibold">Active Subscription</h3>
+                  <p className="text-sm text-gray-600">
+                    <span className="font-medium capitalize">{activePayment.packageType} Package</span> - 
+                    Valid until {new Date(activePayment.validUntil).toLocaleDateString()}
+                  </p>
+                </div>
+                <Button 
+                  variant="outline" 
+                  className="bg-white" 
+                  onClick={() => setLocation('/exam')}
+                >
+                  Start Exam
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {activePayment ? (
           <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card>
@@ -300,7 +357,7 @@ export default function HomePage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {packages.map((pkg) => (
             <Card key={pkg.type}>
               <CardHeader>

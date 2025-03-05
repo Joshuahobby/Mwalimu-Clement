@@ -580,8 +580,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`Extended expired payment ${payment.id} validity to ${newValidUntil}`);
           }
 
-          console.log('Redirecting to payment success page with tx_ref:', tx_ref);
-          return res.redirect(`/payment/success?tx_ref=${tx_ref}`);
+          console.log('Redirecting to dashboard with successful payment notification');
+          return res.redirect(`/?payment=success&tx_ref=${tx_ref}`);
         } else {
           console.error('Payment verification failed. Status:', transaction.status);
           return res.redirect('/?payment=failed');
