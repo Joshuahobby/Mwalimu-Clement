@@ -495,21 +495,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('Verification response:', JSON.stringify(transaction, null, 2));
 
         if (transaction.status === "successful") {
+          const metadata = {
+            tx_ref,
+            transaction_id,
+            status: transaction.status,
+            verified_at: new Date().toISOString(),
+            verification_method: 'redirect',
+            journey: {
+              status: "initial",
+              last_activity_at: new Date().toISOString()
+            }
+          };
+
           const [payment] = await db
             .update(payments)
             .set({
               status: "completed",
-              metadata: sql`
-                jsonb_set(
-                  jsonb_set(
-                    COALESCE(metadata, '{}'::jsonb),
-                    '{tx_ref}',
-                    ${JSON.stringify(tx_ref)}::jsonb
-                  ),
-                  '{journey}',
-                  '{"status": "initial", "last_activity_at": "${new Date().toISOString()}"}'::jsonb
-                )
-              `
+              metadata
             })
             .where(
               and(
