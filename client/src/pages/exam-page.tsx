@@ -79,8 +79,15 @@ export default function ExamPage() {
   const submitMutation = useMutation({
     mutationFn: async () => {
       if (!exam) throw new Error('No active exam');
+      
+      // Ensure answers array matches the questions length
+      const submissionAnswers = [...answers];
+      while (submissionAnswers.length < exam.questions.length) {
+        submissionAnswers.push(-1); // Fill unanswered questions with -1
+      }
+      
       const res = await apiRequest("PATCH", `/api/exams/${exam.id}`, {
-        answers,
+        answers: submissionAnswers,
         endTime: new Date().toISOString(),
       });
       if (!res.ok) {

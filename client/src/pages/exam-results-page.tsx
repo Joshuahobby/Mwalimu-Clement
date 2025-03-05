@@ -195,7 +195,22 @@ const ExamResultsPage = () => {
             <Button 
               variant="default" 
               size="lg"
-              onClick={generatePDF}
+              onClick={() => {
+                setPdfGenerating(true);
+                try {
+                  const doc = generateResultPDF(exam, correctAnswers, passed, examDate);
+                  doc.save(`driving-theory-results-${examDate.toISOString().split('T')[0]}.pdf`);
+                } catch (error) {
+                  console.error('Error generating PDF:', error);
+                  toast({
+                    title: "Error",
+                    description: "Failed to generate PDF. Please try again.",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setPdfGenerating(false);
+                }
+              }}
               disabled={pdfGenerating}
               className="flex items-center"
             >
@@ -215,6 +230,55 @@ const ExamResultsPage = () => {
       </Card>
     </div>
   );
+};
+
+import { jsPDF } from 'jspdf';
+
+// Helper function to generate PDF
+const generateResultPDF = (exam: any, correctAnswers: number, passed: boolean, examDate: Date) => {
+  const doc = new jsPDF();
+  
+  // Add header
+  doc.setFontSize(22);
+  doc.setTextColor(0, 0, 255);
+  doc.text("DRIVING THEORY TEST RESULTS", 105, 20, { align: 'center' });
+  
+  // Add logo or image if needed
+  // doc.addImage(logoBase64, 'PNG', 10, 10, 30, 30);
+  
+  // Add status
+  doc.setFontSize(16);
+  doc.setTextColor(passed ? 0, 128, 0 : 255, 0, 0);
+  doc.text(passed ? "PASSED" : "FAILED", 105, 40, { align: 'center' });
+  
+  // Add info table
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
+  
+  const startY = 60;
+  const lineHeight = 10;
+  
+  doc.text("Exam Results Summary", 20, startY);
+  doc.line(20, startY + 2, 190, startY + 2);
+  
+  doc.text(`Date: ${examDate.toLocaleDateString()}`, 20, startY + lineHeight * 2);
+  doc.text(`Score: ${exam.score}%`, 20, startY + lineHeight * 3);
+  doc.text(`Correct Answers: ${correctAnswers}/20`, 20, startY + lineHeight * 4);
+  doc.text(`Status: ${passed ? "PASSED" : "FAILED"}`, 20, startY + lineHeight * 5);
+  
+  if (passed) {
+    doc.text("Congratulations! You have successfully passed the driving theory exam.", 20, startY + lineHeight * 7);
+    doc.text("You may proceed to the next step in your driving license process.", 20, startY + lineHeight * 8);
+  } else {
+    doc.text("You did not pass the driving theory exam this time.", 20, startY + lineHeight * 7);
+    doc.text("You need at least 12 correct answers to pass. Please try again.", 20, startY + lineHeight * 8);
+  }
+  
+  // Add footer
+  doc.setFontSize(10);
+  doc.text("This is an official result slip from the Driving Theory Test System", 105, 280, { align: 'center' });
+  
+  return doc;
 };
 
 export default ExamResultsPage;
