@@ -592,7 +592,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const [updatedExam] = await db
             .update(exams)
             .set({
-                answers: JSON.stringify(req.body.answers),
+                answers: req.body.answers, // Don't stringify - drizzle handles this
                 score,
                 endTime: new Date()
             })
@@ -607,9 +607,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json(updatedExam);
     } catch (error) {
         console.error('Error updating exam:', error);
+        
+        // Provide more specific error message for common issues
+        let errorMessage = "Unknown error";
+        if (error instanceof Error) {
+            errorMessage = error.message;
+            
+            // Check for specific database errors
+            if (errorMessage.includes('malformed array literal')) {
+                errorMessage = "Invalid answer format. Please try again.";
+            }
+        }
+        
         res.status(500).json({ 
             message: "Failed to update exam",
-            error: error instanceof Error ? error.message : "Unknown error"
+            error: errorMessage
         });
     }
   });
