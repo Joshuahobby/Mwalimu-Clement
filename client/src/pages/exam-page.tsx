@@ -35,7 +35,9 @@ export default function ExamPage() {
     staleTime: 0,
     onSuccess: (data) => {
       if (data && !data.endTime) {
-        setAnswers(data.answers ?? new Array(data.questions.length).fill(-1));
+        // Ensure answers array is initialized correctly
+        const answersArray = data.answers || new Array(data.questions.length).fill(-1);
+        setAnswers(answersArray);
         setExamStartTime(new Date(data.startTime));
       }
     }
@@ -79,13 +81,13 @@ export default function ExamPage() {
   const submitMutation = useMutation({
     mutationFn: async () => {
       if (!exam) throw new Error('No active exam');
-      
+
       // Ensure answers array matches the questions length
       const submissionAnswers = [...answers];
       while (submissionAnswers.length < exam.questions.length) {
         submissionAnswers.push(-1); // Fill unanswered questions with -1
       }
-      
+
       const res = await apiRequest("PATCH", `/api/exams/${exam.id}`, {
         answers: submissionAnswers,
         endTime: new Date().toISOString(),

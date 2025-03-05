@@ -585,11 +585,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Get questions for the exam
+      // Get questions for the exam - Fix the array casting issue
       const examQuestions = await db
         .select()
         .from(questions)
-        .where(sql`id = ANY(${exam.questions}::int[])`);
+        .where(sql`id = ANY(${exam.questions})`);
 
       // Calculate correct answers
       const correctCount = examQuestions.reduce((count, question, index) => {
@@ -980,7 +980,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Payment verification route error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       return res.redirect('/?error=verification_failed&details=' + encodeURIComponent(errorMessage));
-        }
+    }
   });
 
   // Add journey tracking endpoint
