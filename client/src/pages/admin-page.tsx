@@ -240,7 +240,7 @@ export default function AdminPage() {
     enabled: activeSection === "users",
   });
 
-  const categories = [...new Set(questions?.map(q => q.category) || [])];
+  const categories = Array.from(new Set(questions?.map(q => q.category) || []));
 
   const filteredQuestions = questions?.filter(question => {
     const matchesSearch = question.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1034,8 +1034,7 @@ export default function AdminPage() {
                           <TableCell>
                             <Button
                               variant="destructive"
-                              size="sm"
-                              onClick={() => terminateSessionMutation.mutate(session.userId)}
+                              size="sm"                              onClick={() => terminateSessionMutation.mutate(session.userId)}
                               disabled={terminateSessionMutation.isPending}
                             >
                               Terminate Session

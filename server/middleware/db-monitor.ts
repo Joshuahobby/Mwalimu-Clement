@@ -17,10 +17,12 @@ class DatabaseMonitor {
   private static instance: DatabaseMonitor;
   private queryStats: Map<string, QueryStats>;
   private slowQueryThreshold: number;
+  private originalQuery: typeof pool.query;
 
   private constructor() {
     this.queryStats = new Map();
     this.slowQueryThreshold = 1000; // 1 second
+    this.originalQuery = pool.query;
     this.startPeriodicCleanup();
   }
 
@@ -66,31 +68,40 @@ class DatabaseMonitor {
       poolStatus: getPoolStatus(),
     };
   }
+
+  public monitorQuery() {
+    // Store original query method
+    const originalQuery = this.originalQuery;
+
+    // Return a wrapped version of the query method
+    return async function (...args: Parameters<typeof pool.query>) {
+      const queryStart = Date.now();
+      try {
+        const result = await originalQuery.apply(pool, args);
+        const queryTime = Date.now() - queryStart;
+        dbMonitor.recordQuery(args[0], queryTime);
+        return result;
+      } catch (error) {
+        console.error('Query error:', error);
+        throw error;
+      }
+    };
+  }
+
+  public restoreQuery() {
+    pool.query = this.originalQuery;
+  }
 }
 
 export const dbMonitor = DatabaseMonitor.getInstance();
 
 export function monitorDatabase(req: Request, res: Response, next: NextFunction) {
-  const start = Date.now();
-
   // Monkey patch the query method to monitor execution time
-  const originalQuery = pool.query;
-  pool.query = async function (...args: any[]) {
-    const queryStart = Date.now();
-    try {
-      const result = await originalQuery.apply(this, args);
-      const queryTime = Date.now() - queryStart;
-      dbMonitor.recordQuery(args[0], queryTime);
-      return result;
-    } catch (error) {
-      console.error('Query error:', error);
-      throw error;
-    }
-  };
+  pool.query = dbMonitor.monitorQuery();
 
   res.on('finish', () => {
     // Restore original query method
-    pool.query = originalQuery;
+    dbMonitor.restoreQuery();
   });
 
   next();
@@ -99,12 +110,10 @@ export function monitorDatabase(req: Request, res: Response, next: NextFunction)
 // Health check endpoint middleware
 export function healthCheck(req: Request, res: Response) {
   const stats = dbMonitor.getStats();
-  const poolStatus = getPoolStatus();
-  
+
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    poolStatus,
-    ...stats,
+    stats,
   });
 }
