@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from '@tanstack/react-query';
-import { useLocation, useQueryParams } from "wouter";
+import { useLocation } from "wouter";
+import { useQueryParams } from '@/hooks/use-query-params';
 import { Clock, CalendarDays, CreditCard, BookOpen, Wallet, Building } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
