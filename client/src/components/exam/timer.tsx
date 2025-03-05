@@ -9,25 +9,12 @@ interface TimerProps {
 
 const TWENTY_MINUTES = 20 * 60 * 1000; // 20 minutes in milliseconds
 
-const Timer = ({ startTime, duration = TWENTY_MINUTES, onTimeUp, isPaused = false }: TimerProps) => {
+const Timer = ({ onTimeUp, isPaused = false }: TimerProps) => {
   const [timeLeft, setTimeLeft] = useState(TWENTY_MINUTES);
   const [warningShown, setWarningShown] = useState(false);
   const timerRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
-    // Calculate initial time left with server time sync
-    const calculateTimeLeft = () => {
-      const now = new Date().getTime();
-      const start = new Date(startTime).getTime();
-      const elapsed = now - start;
-      // Ensure duration is capped at 20 minutes
-      const maxDuration = Math.min(duration, TWENTY_MINUTES);
-      return Math.max(0, maxDuration - elapsed);
-    };
-
-    // Set initial time
-    setTimeLeft(calculateTimeLeft());
-
     // Clear any existing interval
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -36,23 +23,27 @@ const Timer = ({ startTime, duration = TWENTY_MINUTES, onTimeUp, isPaused = fals
     if (!isPaused) {
       // Set up new interval
       timerRef.current = setInterval(() => {
-        const remaining = calculateTimeLeft();
-        setTimeLeft(remaining);
+        setTimeLeft((prevTime) => {
+          const newTime = prevTime - 1000; // Decrease by 1 second (1000ms)
 
-        // Show warning when 5 minutes remaining
-        if (!warningShown && remaining <= 5 * 60 * 1000) {
-          setWarningShown(true);
-        }
+          // Show warning when 5 minutes remaining
+          if (!warningShown && newTime <= 5 * 60 * 1000) {
+            setWarningShown(true);
+          }
 
-        // Handle time up
-        if (remaining <= 0) {
-          if (onTimeUp) {
-            onTimeUp();
+          // Handle time up
+          if (newTime <= 0) {
+            if (onTimeUp) {
+              onTimeUp();
+            }
+            if (timerRef.current) {
+              clearInterval(timerRef.current);
+            }
+            return 0;
           }
-          if (timerRef.current) {
-            clearInterval(timerRef.current);
-          }
-        }
+
+          return newTime;
+        });
       }, 1000);
     }
 
@@ -62,7 +53,7 @@ const Timer = ({ startTime, duration = TWENTY_MINUTES, onTimeUp, isPaused = fals
         clearInterval(timerRef.current);
       }
     };
-  }, [startTime, duration, onTimeUp, isPaused, warningShown]);
+  }, [onTimeUp, isPaused, warningShown]);
 
   const minutes = Math.floor(timeLeft / 60000);
   const seconds = Math.floor((timeLeft % 60000) / 1000);
