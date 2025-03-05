@@ -71,6 +71,9 @@ export const exams = pgTable("exams", {
 export const paymentStatuses = ["pending", "completed", "failed", "refunded"] as const;
 export type PaymentStatus = typeof paymentStatuses[number];
 
+export const paymentJourneyStatus = ["initial", "exam_started", "practice_completed", "exam_completed"] as const;
+export type PaymentJourneyStatus = typeof paymentJourneyStatus[number];
+
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -93,6 +96,17 @@ export const payments = pgTable("payments", {
     originally_expired?: boolean;
     original_valid_until?: Date;
     extended_at?: string;
+    // Add journey tracking
+    journey?: {
+      status: PaymentJourneyStatus;
+      exam_started_at?: string;
+      practice_completed_at?: string;
+      exam_completed_at?: string;
+      last_activity_at?: string;
+      total_questions_attempted?: number;
+      correct_answers?: number;
+      time_spent_minutes?: number;
+    };
   }>(),
 }, (table) => {
   return {

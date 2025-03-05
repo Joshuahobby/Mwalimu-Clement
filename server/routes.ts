@@ -475,10 +475,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Payment verification redirect handler (for browser redirects)
+  // Update the redirect verification handler
   app.get("/api/payments/verify_by_reference", async (req, res) => {
     try {
-      console.log('Payment verification redirect received:', req.query);
+      console.log('Payment verification redirect received:', {
+        query: req.query,
+        user: req.user?.id
+      });
 
       const { tx_ref, transaction_id, status } = req.query;
 
@@ -496,13 +499,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .update(payments)
             .set({
               status: "completed",
-              metadata: {
-                tx_ref,
-                transaction_id,
-                status: transaction.status,
-                verified_at: new Date().toISOString(),
-                verification_method: 'redirect'
-              }
+              metadata: sql`
+                jsonb_set(
+                  jsonb_set(
+                    COALESCE(metadata, '{}'::jsonb),
+                    '{tx_ref}',
+                    ${JSON.stringify(tx_ref)}::jsonb
+                  ),
+                  '{journey}',
+                  '{"status": "initial", "last_activity_at": "${new Date().toISOString()}"}'::jsonb
+                )
+              `
             })
             .where(
               and(
@@ -546,7 +553,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`Extended expired payment ${payment.id} validity to ${newValidUntil}`);
           }
 
-          return res.redirect('/exam');
+          console.log('Redirecting to payment success page with tx_ref:', tx_ref);
+          return res.redirect(`/payment/success?tx_ref=${tx_ref}`);
         } else {
           console.error('Payment verification failed. Status:', transaction.status);
           return res.redirect('/?payment=failed');
@@ -563,10 +571,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/payments/active", async (req, res) => {
-    try {
-      if (!req.isAuthenticated()) return res.sendStatus(401);
+  // Add journey tracking endpoint
+  app.post("/api/payments/journey", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
 
+    try {
+      const { status, questionCount, correctAnswers, timeSpent } = req.body;
+
+      // Get active payment
       const [payment] = await db
         .select()
         .from(payments)
@@ -583,6 +595,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!payment) {
         return res.status(404).json({ message: "No active payment found" });
       }
+
+      // Update journey tracking data
+      const currentJourney = payment.metadata?.journey || {
+        status: "initial",
+        total_questions_attempted: 0,
+        correct_answers: 0,
+        time_spent_minutes: 0
+      };
+
+      const updatedJourney = {
+        ...currentJourney,
+        status,
+        last_activity_at: new Date().toISOString(),
+        total_questions_attempted: (currentJourney.total_questions_attempted || 0) + (questionCount || 0),
+        correct_answers: (currentJourney.correct_answers || 0) + (correctAnswers || 0),
+        time_spent_minutes: (currentJourney.time_spent_minutes || 0) + (timeSpent || 0)
+      };
+
+      // Add timestamps based on status
+      if (status === 'exam_started' && !currentJourney.exam_started_at) {
+        updatedJourney.exam_started_at = new Date().toISOString();
+      } else if (status === 'practice_completed' && !currentJourney.practice_completed_at) {
+        updatedJourney.practice_completed_at = new Date().toISOString();
+      } else if (status === 'exam_completed' && !currentJourney.exam_completed_at) {
+        updatedJourney.exam_completed_at = new Date().toISOString();
+      }
+
+      const [updatedPayment] = await db
+        .update(payments)
+        .set({
+          metadata: {
+            ...payment.metadata,
+            journey: updatedJourney
+          }
+        })
+        .where(eq(payments.id, payment.id))
+        .returning();
+
+      res.json(updatedPayment);
+    } catch (error) {
+      console.error('Journey update error:', error);
+      res.status(500).json({
+        message: "Failed to update journey",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Add more detailed logging to the active payment endpoint
+  app.get("/api/payments/active", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.sendStatus(401);
+
+      console.log('Fetching active payment for user:', req.user.id);
+
+      const [payment] = await db
+        .select()
+        .from(payments)
+        .where(
+          and(
+            eq(payments.userId, req.user.id),
+            eq(payments.status, "completed"),
+            sql`valid_until > NOW()`
+          )
+        )
+        .orderBy(desc(payments.createdAt))
+        .limit(1);
+
+      if (!payment) {
+        console.log('No active payment found for user:', req.user.id);
+        return res.status(404).json({ message: "No active payment found" });
+      }
+
+      console.log('Found active payment:', {
+        id: payment.id,
+        status: payment.status,
+        validUntil: payment.validUntil,
+        journey: payment.metadata?.journey
+      });
 
       res.json(payment);
     } catch (error) {

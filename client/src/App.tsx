@@ -9,6 +9,7 @@ import AuthPage from "@/pages/auth-page";
 import ExamPage from "@/pages/exam-page";
 import AdminPage from "@/pages/admin-page";
 import ProfilePage from "@/pages/profile-page";
+import PaymentSuccessPage from "@/pages/payment-success";
 import ExamSimulationPage from "@/pages/exam-simulation-page";
 import { ProtectedRoute } from "./lib/protected-route";
 
@@ -20,6 +21,7 @@ function Router() {
       <ProtectedRoute path="/exam-simulation" component={ExamSimulationPage} />
       <ProtectedRoute path="/admin" component={AdminPage} adminOnly />
       <ProtectedRoute path="/profile" component={ProfilePage} />
+      <ProtectedRoute path="/payment/success" component={PaymentSuccessPage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>
