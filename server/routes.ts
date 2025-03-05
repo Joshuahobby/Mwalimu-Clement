@@ -244,28 +244,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Exams
+  app.get("/api/exams/current", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      // Get active exam for current user (where endTime is null)
+      const [activeExam] = await db
+        .select()
+        .from(exams)
+        .where(
+          and(
+            eq(exams.userId, req.user.id),
+            sql`end_time IS NULL`
+          )
+        )
+        .orderBy(desc(exams.startTime))
+        .limit(1);
+
+      if (!activeExam) {
+        return res.status(404).json({ message: "No active exam found" });
+      }
+
+      res.json(activeExam);
+    } catch (error) {
+      console.error('Error fetching active exam:', error);
+      res.status(500).json({ message: "Failed to fetch active exam" });
+    }
+  });
+
   app.post("/api/exams", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
-    const activePayment = await storage.getActivePayment(req.user.id);
-    if (!activePayment) return res.status(402).send("No active payment found");
+    try {
+      // Check for active exam
+      const [activeExam] = await db
+        .select()
+        .from(exams)
+        .where(
+          and(
+            eq(exams.userId, req.user.id),
+            sql`end_time IS NULL`
+          )
+        );
 
-    const questions = await storage.getQuestions();
-    const randomQuestions = questions
-      .sort(() => Math.random() - 0.5)
-      .slice(0, 20)
-      .map(q => q.id);
+      if (activeExam) {
+        return res.status(400).json({ message: "You already have an active exam" });
+      }
 
-    const exam = await storage.createExam({
-      userId: req.user.id,
-      startTime: new Date(),
-      endTime: null,
-      score: null,
-      questions: randomQuestions,
-      answers: [],
-    });
+      // Get all questions
+      const allQuestions = await db
+        .select()
+        .from(questions)
+        .orderBy(sql`RANDOM()`);
 
-    res.json(exam);
+      if (allQuestions.length < 20) {
+        return res.status(500).json({ message: "Not enough questions available" });
+      }
+
+      // Select 20 random questions
+      const selectedQuestions = allQuestions.slice(0, 20).map(q => q.id);
+
+      // Create new exam
+      const [exam] = await db
+        .insert(exams)
+        .values({
+          userId: req.user.id,
+          startTime: new Date(),
+          endTime: null,
+          questions: selectedQuestions,
+          answers: new Array(20).fill(-1), // Initialize with -1 (unanswered)
+          score: null
+        })
+        .returning();
+
+      console.log('Created new exam:', exam);
+      res.json(exam);
+    } catch (error) {
+      console.error('Error creating exam:', error);
+      res.status(500).json({ 
+        message: "Failed to create exam",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
   });
 
   app.patch("/api/exams/:id", async (req, res) => {
@@ -1103,7 +1163,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .where(eq(payments.id, paymentId))
         .returning();
-
 
       console.log('Payment refunded:', refundedPayment);
 

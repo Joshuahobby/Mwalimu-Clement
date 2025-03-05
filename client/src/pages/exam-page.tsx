@@ -9,7 +9,6 @@ import Timer from "@/components/exam/timer";
 import QuestionNavigation from "@/components/exam/question-navigation";
 import AccessibilitySettings from "@/components/exam/accessibility-settings";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
