@@ -1146,6 +1146,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .select()
         .from(payments)
         .where(
+          and(
+            eq(payments.userId, req.user.id),
+            eq(payments.status, "completed"),
+            sql`valid_until > NOW()`
+          )
+        )
+        .orderBy(desc(payments.createdAt))
+        .limit(1);
 
   // Maintenance mode toggle
   app.post("/api/admin/maintenance", async (req, res) => {
@@ -1206,15 +1214,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch maintenance mode status" });
     }
   });
-
-          and(
-            eq(payments.userId, req.user.id),
-            eq(payments.status, "completed"),
-            sql`valid_until > NOW()`
-          )
-        )
-        .orderBy(desc(payments.createdAt))
-        .limit(1);
 
       // Get simulation logs for category performance
       const simulationLogs = await db
