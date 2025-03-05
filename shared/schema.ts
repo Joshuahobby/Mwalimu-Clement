@@ -246,12 +246,6 @@ export const insertStudySessionSchema = createInsertSchema(studySessions).omit({
 export type StudySession = typeof studySessions.$inferSelect;
 export type InsertStudySession = z.infer<typeof insertStudySessionSchema>;
 
-  single: 200,
-  daily: 800,
-  weekly: 4000,
-  monthly: 10000,
-} as const;
-
 export type PackageType = keyof typeof packagePrices;
 
 export type User = typeof users.$inferSelect;

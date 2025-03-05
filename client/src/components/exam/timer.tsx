@@ -6,7 +6,7 @@ interface TimerProps {
   isPaused?: boolean;
 }
 
-export function Timer({ initialTime, onTimeUp, isPaused = false }: TimerProps) {
+const Timer = ({ initialTime, onTimeUp, isPaused = false }: TimerProps) => {
   const [timeLeft, setTimeLeft] = useState(initialTime);
 
   useEffect(() => {
@@ -46,4 +46,6 @@ export function Timer({ initialTime, onTimeUp, isPaused = false }: TimerProps) {
       </div>
     </div>
   );
-}
+};
+
+export default Timer;
