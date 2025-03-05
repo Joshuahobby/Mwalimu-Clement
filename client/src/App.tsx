@@ -56,9 +56,7 @@ function Router() {
 
 import PaymentToastProvider from "@/components/notifications/payment-toast";
 
-export default App;
-
-function App() {
+export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
