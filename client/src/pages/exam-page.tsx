@@ -96,13 +96,11 @@ export default function ExamPage() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/exams/current"] });
-      const score = (data.correctAnswers / 20) * 100;
-      const passed = data.correctAnswers >= 12;
-      setLocation("/");
-      toast({
-        title: passed ? "Congratulations!" : "Exam Completed",
-        description: `You scored ${score}% (${data.correctAnswers}/20). ${passed ? "You have passed!" : "You need 12 marks to pass."}`,
-      });
+      const correctAnswers = data.score ? Math.round((data.score / 100) * 20) : 0;
+      const passed = data.score >= 70; // 70% corresponds to 14/20 marks (to be safe)
+      
+      // Navigate to the results page instead of home
+      setLocation(`/exam-results/${data.id}`);
     },
     onError: (error: Error) => {
       toast({

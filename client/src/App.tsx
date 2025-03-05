@@ -15,6 +15,7 @@ import { ProtectedRoute } from "./lib/protected-route";
 import ProgressDashboard from "./pages/progress-dashboard";
 import { useEffect } from "react";
 import PaymentToastProvider from "@/components/notifications/payment-toast";
+import ExamResultsPage from "./pages/exam-results-page"; // Added import
 
 function Router() {
   return (
@@ -27,6 +28,7 @@ function Router() {
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/payment/success" component={PaymentSuccessPage} />
       <Route path="/auth" component={AuthPage} />
+      <Route path="/exam-results/:id" component={ExamResultsPage} /> {/* Added route */}
       <Route component={NotFound} />
     </Switch>
   );

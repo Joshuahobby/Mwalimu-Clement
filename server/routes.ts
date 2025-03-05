@@ -465,6 +465,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/exams/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const examId = parseInt(req.params.id);
+      
+      const [exam] = await db
+        .select()
+        .from(exams)
+        .where(
+          and(
+            eq(exams.id, examId),
+            eq(exams.userId, req.user.id)
+          )
+        );
+
+      if (!exam) {
+        return res.status(404).json({ message: "Exam not found" });
+      }
+
+      res.json(exam);
+    } catch (error) {
+      console.error('Error fetching exam:', error);
+      res.status(500).json({ message: "Failed to fetch exam" });
+    }
+  });
+
   app.post("/api/exams", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
