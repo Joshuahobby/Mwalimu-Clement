@@ -1028,7 +1028,7 @@ export default function AdminPage() {
                           <TableCell>{session.device}</TableCell>
                           <TableCell>
                             <Badge variant={session.isActive ? "default" : "secondary"}>
-                              {session.isActive ? ""Active" : "Inactive"}
+                              {session.isActive ? "Active" : "Inactive"}
                             </Badge>
                           </TableCell>
                           <TableCell>
