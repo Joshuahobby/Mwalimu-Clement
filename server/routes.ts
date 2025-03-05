@@ -354,11 +354,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Exam already completed" });
       }
 
-      // Get questions to calculate score
+      // Get questions using proper array syntax for Postgres
       const examQuestions = await db
         .select()
         .from(questions)
-        .where(sql`id = ANY(${exam.questions})`);
+        .where(sql`id = ANY(${sql.array(exam.questions, 'int4')})`)
+        .orderBy(sql`array_position(${sql.array(exam.questions, 'int4')}, id)`);
 
       // Calculate correct answers
       const correctAnswers = examQuestions.reduce((count, question, index) => {
@@ -375,7 +376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           answers: req.body.answers,
           score,
           endTime: new Date(),
-          correctAnswers // Add this field to track correct answers
+          correctAnswers
         })
         .where(eq(exams.id, examId))
         .returning();
