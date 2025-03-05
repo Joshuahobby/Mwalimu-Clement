@@ -548,6 +548,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update the exam patch endpoint
   app.patch("/api/exams/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
@@ -573,16 +574,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Exam already completed" });
       }
 
-      // Get questions for the exam with proper type handling
+      // Ensure answers is an array of integers
+      const answers = Array.isArray(req.body.answers) 
+        ? req.body.answers.map(Number) 
+        : [];
+
+      if (answers.length !== exam.questions.length) {
+        return res.status(400).json({ 
+          message: "Invalid answers array length" 
+        });
+      }
+
+      // Get questions for the exam
       const examQuestions = await db
         .select()
         .from(questions)
-        .where(sql`id = ANY(${exam.questions}::int[])`)
-        .orderBy(sql`array_position(${exam.questions}::int[], id)`);
+        .where(sql`id = ANY(${exam.questions}::int[])`);
 
       // Calculate correct answers
       const correctCount = examQuestions.reduce((count, question, index) => {
-        return count + (req.body.answers[index] === question.correctAnswer ? 1 : 0);
+        return count + (answers[index] === question.correctAnswer ? 1 : 0);
       }, 0);
 
       // Calculate score (percentage)
@@ -592,7 +603,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const [updatedExam] = await db
         .update(exams)
         .set({
-          answers: sql`${JSON.stringify(req.body.answers)}::int[]`,
+          answers,
           score,
           endTime: new Date()
         })
@@ -608,21 +619,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updatedExam);
     } catch (error) {
       console.error('Error updating exam:', error);
-
-      // Provide more specific error message for common issues
-      let errorMessage = "Unknown error";
-      if (error instanceof Error) {
-        errorMessage = error.message;
-
-        // Check for specific database errors
-        if (errorMessage.includes('malformed array literal')) {
-          errorMessage = "Invalid answer format. Please try again.";
-        }
-      }
-
       res.status(500).json({ 
         message: "Failed to update exam",
-        error: errorMessage
+        error: error instanceof Error ? error.message : "Unknown error"
       });
     }
   });
@@ -981,7 +980,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Payment verification route error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       return res.redirect('/?error=verification_failed&details=' + encodeURIComponent(errorMessage));
-    }
+        }
   });
 
   // Add journey tracking endpoint

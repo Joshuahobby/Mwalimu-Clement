@@ -59,8 +59,8 @@ export const exams = pgTable("exams", {
   startTime: timestamp("start_time").notNull(),
   endTime: timestamp("end_time"),
   score: integer("score"),
-  questions: json("questions").$type<number[]>().notNull(),
-  answers: json("answers").$type<number[]>(),
+  questions: integer("questions").array().notNull(),
+  answers: integer("answers").array(),
 }, (table) => {
   return {
     userIdIdx: index("user_id_idx").on(table.userId),
