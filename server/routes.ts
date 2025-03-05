@@ -342,67 +342,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
     try {
-      const examId = parseInt(req.params.id);
+        const examId = parseInt(req.params.id);
 
-      // Get the exam and verify ownership
-      const [exam] = await db
-        .select()
-        .from(exams)
-        .where(
-          and(
-            eq(exams.id, examId),
-            eq(exams.userId, req.user.id)
-          )
-        );
+        // Get the exam and verify ownership
+        const [exam] = await db
+            .select()
+            .from(exams)
+            .where(
+                and(
+                    eq(exams.id, examId),
+                    eq(exams.userId, req.user.id)
+                )
+            );
 
-      if (!exam) {
-        return res.status(404).json({ message: "Exam not found" });
-      }
+        if (!exam) {
+            return res.status(404).json({ message: "Exam not found" });
+        }
 
-      if (exam.endTime) {
-        return res.status(400).json({ message: "Exam already completed" });
-      }
+        if (exam.endTime) {
+            return res.status(400).json({ message: "Exam already completed" });
+        }
 
-      // Get questions for the exam
-      const examQuestions = await db
-        .select()
-        .from(questions)
-        .where(sql`id = ANY(${exam.questions}::int[])`)
-        .orderBy(sql`array_position(${exam.questions}::int[], id)`);
+        // Get questions for the exam using proper array casting
+        const examQuestions = await db
+            .select()
+            .from(questions)
+            .where(sql`id = ANY(${sql.array(exam.questions, 'int4')})`)
+            .orderBy(sql`array_position(${sql.array(exam.questions, 'int4')}, id)`);
 
-      // Calculate correct answers
-      const correctCount = examQuestions.reduce((count, question, index) => {
-        return count + (req.body.answers[index] === question.correctAnswer ? 1 : 0);
-      }, 0);
+        // Calculate correct answers
+        const correctCount = examQuestions.reduce((count, question, index) => {
+            return count + (req.body.answers[index] === question.correctAnswer ? 1 : 0);
+        }, 0);
 
-      // Calculate score (percentage)
-      const score = (correctCount / examQuestions.length) * 100;
+        // Calculate score (percentage)
+        const score = (correctCount / examQuestions.length) * 100;
 
-      // Update exam with answers and score
-      const [updatedExam] = await db
-        .update(exams)
-        .set({
-          answers: req.body.answers,
-          score,
-          endTime: new Date()
-        })
-        .where(eq(exams.id, examId))
-        .returning();
+        // Update exam with answers and score
+        const [updatedExam] = await db
+            .update(exams)
+            .set({
+                answers: req.body.answers,
+                score,
+                endTime: new Date()
+            })
+            .where(eq(exams.id, examId))
+            .returning();
 
-      console.log('Exam completed:', {
-        id: updatedExam.id,
-        score: updatedExam.score
-      });
+        console.log('Exam completed:', {
+            id: updatedExam.id,
+            score: updatedExam.score
+        });
 
-      res.json(updatedExam);
+        res.json(updatedExam);
     } catch (error) {
-      console.error('Error updating exam:', error);
-      res.status(500).json({ 
-        message: "Failed to update exam",
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
+        console.error('Error updating exam:', error);
+        res.status(500).json({ 
+            message: "Failed to update exam",
+            error: error instanceof Error ? error.message : "Unknown error"
+        });
     }
-  });
+});
 
   // Admin Package Management Routes
   app.get("/api/admin/packages", async (req, res) => {
@@ -954,8 +954,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Find strongest and weakest categories
       const sortedCategories = [...categoryPerformance].sort((a, b) => b.percentage - a.percentage);
-      const strongestCategory = sortedCategories[0]?.category;
-      const weakestCategory = sortedCategories[sortedCategories.length - 1]?.category;
+      const strongestCategory = sortedCategories[0]?.category;const weakestCategory = sortedCategories[sortedCategories.length - 1]?.category;
 
       // Calculate study streak
       const today = new Date();
