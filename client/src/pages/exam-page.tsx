@@ -10,10 +10,19 @@ import QuestionNavigation from "@/components/exam/question-navigation";
 import AccessibilitySettings from "@/components/exam/accessibility-settings";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loader2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function ExamPage() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<number[]>([]);
+  const [showConfirmation, setShowConfirmation] = useState(true);
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
@@ -29,6 +38,19 @@ export default function ExamPage() {
     enabled: !!exam,
   });
 
+  const startExamMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/exams/start", {
+        questionCount: 20, // Always 20 questions
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/exams/current"] });
+      setShowConfirmation(false);
+    },
+  });
+
   const submitMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("PATCH", `/api/exams/${exam!.id}`, {
@@ -37,12 +59,14 @@ export default function ExamPage() {
       });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/exams/current"] });
+      const score = (data.correctAnswers / 20) * 100;
+      const passed = data.correctAnswers >= 12;
       setLocation("/");
       toast({
-        title: "Exam submitted",
-        description: "Your exam has been submitted successfully",
+        title: passed ? "Congratulations!" : "Exam Completed",
+        description: `You scored ${score}% (${data.correctAnswers}/20). ${passed ? "You have passed!" : "You need 12 marks to pass."}`,
       });
     },
   });
@@ -61,19 +85,31 @@ export default function ExamPage() {
     );
   }
 
-  if (!exam || !questions) {
+  if (!exam || exam.endTime) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
-        <h1 className="text-2xl font-bold mb-4">No Active Exam</h1>
-        <p className="text-muted-foreground mb-4">
-          Please purchase an exam package to start a new exam.
-        </p>
-        <Button onClick={() => setLocation("/")}>Return to Dashboard</Button>
-      </div>
+      <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Are you ready to start this exam?</DialogTitle>
+            <DialogDescription>
+              If you are not ready, please click on 'I am not ready'. Otherwise click on 'I want to start'. 
+              Then you will be clicking on (Next) to go to the next question and (Previous) to go back to previous questions.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex justify-between">
+            <Button variant="outline" onClick={() => setLocation("/")}>
+              I am not ready
+            </Button>
+            <Button onClick={() => startExamMutation.mutate()}>
+              I want to start
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     );
   }
 
-  const currentQuestion = questions.find(q => q.id === exam.questions[currentQuestionIndex]);
+  const currentQuestion = questions?.find(q => q.id === exam.questions[currentQuestionIndex]);
 
   if (!currentQuestion) {
     return (
@@ -93,6 +129,15 @@ export default function ExamPage() {
   };
 
   const handleSubmit = () => {
+    const unansweredQuestions = answers.filter(a => a === -1).length;
+    if (unansweredQuestions > 0) {
+      toast({
+        title: "Warning",
+        description: `You have ${unansweredQuestions} unanswered questions. Please answer all questions before submitting.`,
+        variant: "destructive",
+      });
+      return;
+    }
     submitMutation.mutate();
   };
 
@@ -102,7 +147,7 @@ export default function ExamPage() {
         <div className="flex justify-between items-center mb-8">
           <Timer 
             startTime={new Date(exam.startTime)}
-            duration={20 * 60 * 1000}
+            duration={20 * 60 * 1000} // 20 minutes
             onTimeUp={handleSubmit}
           />
           <AccessibilitySettings />
