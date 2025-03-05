@@ -358,8 +358,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const examQuestions = await db
         .select()
         .from(questions)
-        .where(sql`id = ANY(${sql.array(exam.questions, 'int4')})`)
-        .orderBy(sql`array_position(${sql.array(exam.questions, 'int4')}, id)`);
+        .where(sql`id = ANY(${exam.questions})`)
+        .orderBy(sql`array_position(${exam.questions}::int[], id)`);
 
       // Calculate correct answers
       const correctAnswers = examQuestions.reduce((count, question, index) => {
