@@ -671,119 +671,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     createdAt: new Date(),
                     status: "completed",
                     username: req.user.username,
-
-  // Detailed user analytics endpoint
-  app.get("/api/user/analytics", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-
-    try {
-      // Get all exam simulations completed by the user
-      const userSimulations = await db
-        .select({
-          simulation: examSimulations,
-          logs: sql<number>`COUNT(${examSimulationLogs.id})::int`,
-          correctCount: sql<number>`SUM(CASE WHEN ${examSimulationLogs.isCorrect} THEN 1 ELSE 0 END)::int`
-        })
-        .from(examSimulations)
-        .leftJoin(examSimulationLogs, eq(examSimulations.id, examSimulationLogs.simulationId))
-        .where(eq(examSimulations.userId, req.user.id))
-        .groupBy(examSimulations.id)
-        .orderBy(desc(examSimulations.startTime));
-
-      // Calculate improvement over time
-      const simulationResults = userSimulations.map(({ simulation, logs, correctCount }) => {
-        const accuracy = logs > 0 ? Math.round((correctCount / logs) * 100) : 0;
-        
-        return {
-          id: simulation.id,
-          date: simulation.startTime,
-          accuracy,
-          questionsAttempted: logs,
-          timeSpent: simulation.endTime ? 
-            Math.round((new Date(simulation.endTime).getTime() - new Date(simulation.startTime).getTime()) / 60000) : 
-            0
-        };
-      });
-
-      // Calculate time-based trends
-      const weeklyTrends = [];
-      const now = new Date();
-      
-      for (let i = 4; i >= 0; i--) {
-        const weekStart = new Date(now);
-        weekStart.setDate(now.getDate() - (i * 7 + 7));
-        
-        const weekEnd = new Date(now);
-        weekEnd.setDate(now.getDate() - (i * 7));
-        
-        const weekSimulations = simulationResults.filter(
-          sim => new Date(sim.date) >= weekStart && new Date(sim.date) < weekEnd
-        );
-        
-        const avgAccuracy = weekSimulations.length > 0 
-          ? Math.round(weekSimulations.reduce((sum, sim) => sum + sim.accuracy, 0) / weekSimulations.length) 
-          : 0;
-        
-        weeklyTrends.push({
-          weekOf: weekStart.toISOString().split('T')[0],
-          simulations: weekSimulations.length,
-          avgAccuracy,
-          totalQuestions: weekSimulations.reduce((sum, sim) => sum + sim.questionsAttempted, 0)
-        });
-      }
-
-      // Identify improvement areas
-      const improvementAreas = [];
-      
-      // Get category performance from logs for the last 30 days
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      
-      const categoryPerformance = await db
-        .select({
-          category: questions.category,
-          total: sql<number>`COUNT(*)::int`,
-          correct: sql<number>`SUM(CASE WHEN ${examSimulationLogs.isCorrect} THEN 1 ELSE 0 END)::int`
-        })
-        .from(examSimulationLogs)
-        .leftJoin(questions, eq(examSimulationLogs.questionId, questions.id))
-        .where(
-          and(
-            eq(examSimulationLogs.userId, req.user.id),
-            sql`${examSimulationLogs.timestamp} > ${thirtyDaysAgo}`
-          )
-        )
-        .groupBy(questions.category);
-      
-      categoryPerformance.forEach(cat => {
-        const accuracy = cat.total > 0 ? Math.round((cat.correct / cat.total) * 100) : 0;
-        if (accuracy < 70) {
-          improvementAreas.push({
-            category: cat.category,
-            accuracy,
-            totalQuestions: cat.total
-          });
-        }
-      });
-
-      res.json({
-        simulationResults,
-        weeklyTrends,
-        improvementAreas,
-        recommendedStudyCategories: improvementAreas
-          .sort((a, b) => a.accuracy - b.accuracy)
-          .slice(0, 3)
-          .map(area => area.category)
-      });
-    } catch (error) {
-      console.error('Error fetching user analytics:', error);
-      res.status(500).json({
-        message: "Failed to fetch analytics data",
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
-    }
-  });
-
                     metadata: {
                       tx_ref: String(tx_ref),
                       transaction_id: String(transaction_id),
@@ -1004,7 +891,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     try {
       const { category } = req.body;
-      
+
       const [session] = await db
         .insert(studySessions)
         .values({
@@ -1030,7 +917,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const sessionId = parseInt(req.params.id);
       const { notes } = req.body;
-      
+
       const [session] = await db
         .select()
         .from(studySessions)
@@ -1088,17 +975,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const categorySummary = sessions.reduce((acc, session) => {
         if (!session.category) return acc;
-        
+
         if (!acc[session.category]) {
           acc[session.category] = {
             totalTime: 0,
             sessionCount: 0
           };
         }
-        
+
         acc[session.category].totalTime += session.duration || 0;
         acc[session.category].sessionCount += 1;
-        
+
         return acc;
       }, {} as Record<string, { totalTime: number, sessionCount: number }>);
 
@@ -1161,7 +1048,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     try {
       const { enabled, message } = req.body;
-      
+
       // Update or create the maintenance mode setting
       await db
         .insert(settings)
