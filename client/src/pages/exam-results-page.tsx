@@ -248,7 +248,7 @@ const generateResultPDF = (exam: any, correctAnswers: number, passed: boolean, e
   
   // Add status
   doc.setFontSize(16);
-  doc.setTextColor(passed ? 0, 128, 0 : 255, 0, 0);
+  doc.setTextColor(passed ? [0, 128, 0] : [255, 0, 0]);
   doc.text(passed ? "PASSED" : "FAILED", 105, 40, { align: 'center' });
   
   // Add info table
