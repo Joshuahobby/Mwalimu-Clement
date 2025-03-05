@@ -1023,12 +1023,12 @@ export default function AdminPage() {
                       {sessions?.map((session) => (
                         <TableRow key={session.userId}>
                           <TableCell>{session.username}</TableCell>
-                          <TableCell>{format(newDate(session.lastActivity), 'PPp')}</TableCell>
+                          <TableCell>{format(new Date(session.lastActivity), 'PPp')}</TableCell>
                           <TableCell>{session.ipAddress}</TableCell>
                           <TableCell>{session.device}</TableCell>
                           <TableCell>
                             <Badge variant={session.isActive ? "default" : "secondary"}>
-                              {session.isActive ? "Active" : "Inactive"}
+                              {session.isActive ? ""Active" : "Inactive"}
                             </Badge>
                           </TableCell>
                           <TableCell>
@@ -1427,59 +1427,60 @@ export default function AdminPage() {
                             <TableCell className="text-right">
                               <Select
                                 value={payment.status}
-                              onValueChange={(status: PaymentStatus) =>
-                                updatePaymentStatusMutation.mutate({
-                                  paymentId: payment.id,
-                                  status,
-                                })
-                              }
-                            >
-                              <SelectTrigger className="w-[130px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="pending">Pending</SelectItem>
-                                <SelectItem value="completed">Completed</SelectItem>
-                                <SelectItem value="failed">Failed</SelectItem>
-                                <SelectItem value="refunded">Refunded</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  Actions
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent>
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    updatePaymentStatusMutation.mutate({
-                                      paymentId: payment.id,
-                                      status: "completed",
-                                    })
-                                  }
-                                >
-                                  Mark as Completed
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    updatePaymentStatusMutation.mutate({
-                                      paymentId: payment.id,
-                                      status: "refunded",
-                                    })
-                                  }
-                                >
-                                  Process Refund
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                                onValueChange={(status: PaymentStatus) =>
+                                  updatePaymentStatusMutation.mutate({
+                                    paymentId: payment.id,
+                                    status,
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="w-[130px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="pending">Pending</SelectItem>
+                                  <SelectItem value="completed">Completed</SelectItem>
+                                  <SelectItem value="failed">Failed</SelectItem>
+                                  <SelectItem value="refunded">Refunded</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    Actions
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent>
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      updatePaymentStatusMutation.mutate({
+                                        paymentId: payment.id,
+                                        status: "completed",
+                                      })
+                                    }
+                                  >
+                                    Mark as Completed
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      updatePaymentStatusMutation.mutate({
+                                        paymentId: payment.id,
+                                        status: "refunded",
+                                      })
+                                    }
+                                  >
+                                    Process Refund
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
             </div>
