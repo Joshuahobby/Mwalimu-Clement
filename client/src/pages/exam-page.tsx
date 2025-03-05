@@ -35,19 +35,31 @@ export default function ExamPage() {
   // Fetch questions based on exam data
   const { data: questions, isLoading: questionsLoading } = useQuery<Question[]>({
     queryKey: ["/api/questions"],
-    enabled: !!exam,
+    enabled: !!exam && !exam.endTime,
   });
 
   const startExamMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/exams/start", {
+      const res = await apiRequest("POST", "/api/exams", {
         questionCount: 20, // Always 20 questions
       });
+      if (!res.ok) {
+        throw new Error('Failed to start exam');
+      }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/exams/current"] });
+      setAnswers(new Array(20).fill(-1)); // Initialize answers array with -1 (unanswered)
       setShowConfirmation(false);
+      setCurrentQuestionIndex(0);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -57,6 +69,9 @@ export default function ExamPage() {
         answers,
         endTime: new Date(),
       });
+      if (!res.ok) {
+        throw new Error('Failed to submit exam');
+      }
       return res.json();
     },
     onSuccess: (data) => {
@@ -69,6 +84,13 @@ export default function ExamPage() {
         description: `You scored ${score}% (${data.correctAnswers}/20). ${passed ? "You have passed!" : "You need 12 marks to pass."}`,
       });
     },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   useEffect(() => {
@@ -77,14 +99,19 @@ export default function ExamPage() {
     }
   }, [exam]);
 
-  if (examLoading || questionsLoading) {
+  // Show loading state
+  if (examLoading || questionsLoading || startExamMutation.isPending) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-border" />
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4">Loading your exam...</p>
+        </div>
       </div>
     );
   }
 
+  // Show confirmation dialog when there's no active exam
   if (!exam || exam.endTime) {
     return (
       <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
@@ -109,7 +136,19 @@ export default function ExamPage() {
     );
   }
 
-  const currentQuestion = questions?.find(q => q.id === exam.questions[currentQuestionIndex]);
+  // Make sure we have questions loaded
+  if (!questions || questions.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4">Loading questions...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const currentQuestion = questions.find(q => q.id === exam.questions[currentQuestionIndex]);
 
   if (!currentQuestion) {
     return (
