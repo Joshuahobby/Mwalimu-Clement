@@ -24,6 +24,7 @@ export default function ExamPage() {
   const [showConfirmation, setShowConfirmation] = useState(true);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   const [isTimeUp, setIsTimeUp] = useState(false);
+  const [examStartTime, setExamStartTime] = useState<Date | null>(null);
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
@@ -41,8 +42,11 @@ export default function ExamPage() {
 
   const startExamMutation = useMutation({
     mutationFn: async () => {
+      const startTime = new Date();
+      setExamStartTime(startTime); // Set exam start time for timer
       const res = await apiRequest("POST", "/api/exams", {
         questionCount: 20, // Always 20 questions
+        startTime: startTime.toISOString(),
       });
       if (!res.ok) {
         throw new Error('Failed to start exam');
@@ -98,6 +102,7 @@ export default function ExamPage() {
   useEffect(() => {
     if (exam && !exam.endTime) {
       setAnswers(new Array(exam.questions.length).fill(-1));
+      setExamStartTime(new Date(exam.startTime));
     }
   }, [exam]);
 
@@ -121,8 +126,8 @@ export default function ExamPage() {
           <DialogHeader>
             <DialogTitle>Are you ready to start this exam?</DialogTitle>
             <DialogDescription>
+              You will have 20 minutes to complete this exam. Once you start, the timer cannot be paused.
               If you are not ready, please click on 'I am not ready'. Otherwise click on 'I want to start'.
-              Then you will be clicking on (Next) to go to the next question and (Previous) to go back to previous questions.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex justify-between">
@@ -189,13 +194,18 @@ export default function ExamPage() {
     submitMutation.mutate();
   };
 
+  // Only show exam interface if we have a start time
+  if (!examStartTime) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <Timer 
-            startTime={new Date(exam.startTime)}
-            duration={20 * 60 * 1000} // 20 minutes
+            startTime={examStartTime}
+            duration={20 * 60 * 1000} // 20 minutes in milliseconds
             onTimeUp={handleTimeUp}
           />
           <AccessibilitySettings />
