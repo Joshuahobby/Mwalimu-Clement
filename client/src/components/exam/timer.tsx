@@ -9,22 +9,26 @@ interface TimerProps {
 }
 
 export default function Timer({ startTime, duration, onTimeUp }: TimerProps) {
-  const [timeLeft, setTimeLeft] = useState(
-    Math.max(0, duration - (Date.now() - startTime.getTime()))
-  );
+  const calculateTimeLeft = () => {
+    const now = new Date().getTime();
+    const start = new Date(startTime).getTime();
+    return Math.max(0, duration - (now - start));
+  };
+
+  const [timeLeft, setTimeLeft] = useState(calculateTimeLeft());
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      const newTimeLeft = Math.max(0, duration - (Date.now() - startTime.getTime()));
-      setTimeLeft(newTimeLeft);
-      
-      if (newTimeLeft === 0) {
+    const timer = setInterval(() => {
+      const remaining = calculateTimeLeft();
+      setTimeLeft(remaining);
+
+      if (remaining === 0) {
+        clearInterval(timer);
         onTimeUp();
-        clearInterval(interval);
       }
     }, 1000);
 
-    return () => clearInterval(interval);
+    return () => clearInterval(timer);
   }, [startTime, duration, onTimeUp]);
 
   const minutes = Math.floor(timeLeft / 60000);

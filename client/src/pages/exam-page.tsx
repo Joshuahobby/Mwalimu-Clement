@@ -167,15 +167,6 @@ export default function ExamPage() {
   };
 
   const handleSubmit = () => {
-    const unansweredQuestions = answers.filter(a => a === -1).length;
-    if (unansweredQuestions > 0) {
-      toast({
-        title: "Warning",
-        description: `You have ${unansweredQuestions} unanswered questions. Please answer all questions before submitting.`,
-        variant: "destructive",
-      });
-      return;
-    }
     submitMutation.mutate();
   };
 
