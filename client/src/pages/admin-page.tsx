@@ -87,6 +87,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from 'lucide-react';
 import { DateRangePicker } from "@/components/ui/date-range-picker";
+import ProfileManager from '@/components/ProfileManager';
 
 
 type AnalyticsData = {

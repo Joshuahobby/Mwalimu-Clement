@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocation } from "wouter";
-import { Car } from "lucide-react";
+import { Car, Loader2 } from "lucide-react";
 import { useEffect } from "react";
 
 export default function AuthPage() {
@@ -30,13 +30,17 @@ export default function AuthPage() {
   });
 
   const registerForm = useForm({
-    resolver: zodResolver(insertUserSchema),
+    resolver: zodResolver(insertUserSchema.extend({
+      role: insertUserSchema.shape.role.default('student')
+    })),
     defaultValues: {
       username: "",
       password: "",
+      role: "student",
     },
   });
 
+  // Redirect authenticated users
   useEffect(() => {
     if (user) {
       setLocation(user.isAdmin ? "/admin" : "/");
@@ -75,7 +79,7 @@ export default function AuthPage() {
                           <FormItem>
                             <FormLabel>Username</FormLabel>
                             <FormControl>
-                              <Input {...field} />
+                              <Input {...field} autoComplete="username" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -88,7 +92,11 @@ export default function AuthPage() {
                           <FormItem>
                             <FormLabel>Password</FormLabel>
                             <FormControl>
-                              <Input type="password" {...field} />
+                              <Input 
+                                type="password" 
+                                {...field} 
+                                autoComplete="current-password" 
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -99,6 +107,9 @@ export default function AuthPage() {
                         className="w-full"
                         disabled={loginMutation.isPending}
                       >
+                        {loginMutation.isPending && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
                         Login
                       </Button>
                     </div>
@@ -117,7 +128,7 @@ export default function AuthPage() {
                           <FormItem>
                             <FormLabel>Username</FormLabel>
                             <FormControl>
-                              <Input {...field} />
+                              <Input {...field} autoComplete="username" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -130,7 +141,11 @@ export default function AuthPage() {
                           <FormItem>
                             <FormLabel>Password</FormLabel>
                             <FormControl>
-                              <Input type="password" {...field} />
+                              <Input 
+                                type="password" 
+                                {...field} 
+                                autoComplete="new-password" 
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -141,6 +156,9 @@ export default function AuthPage() {
                         className="w-full"
                         disabled={registerMutation.isPending}
                       >
+                        {registerMutation.isPending && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
                         Register
                       </Button>
                     </div>
