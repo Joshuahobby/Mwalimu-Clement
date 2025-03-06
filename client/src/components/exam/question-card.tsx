@@ -28,8 +28,8 @@ export function QuestionCard({
   correctAnswer,
   className = '',
 }: QuestionCardProps) {
-  // Convert to string, using '-1' as default for no selection
-  const selectedValue = selectedAnswer !== null ? selectedAnswer.toString() : '-1';
+  // Default to '-1' if selectedAnswer is null or undefined
+  const selectedValue = selectedAnswer?.toString() ?? '-1';
 
   return (
     <Card className={cn('w-full transition-all duration-300', className)}>
@@ -103,3 +103,5 @@ export function QuestionCard({
     </Card>
   );
 }
+
+export default QuestionCard;
