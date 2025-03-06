@@ -588,7 +588,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const examQuestions = await db
         .select()
         .from(questions)
-        .where(sql`id = ANY(${sql.array(exam.questions, 'int4')})`);
+        .where(sql`id = ANY(${exam.questions}::int[])`);
 
       if (!examQuestions || examQuestions.length !== exam.questions.length) {
         console.error('Question fetch mismatch:', {

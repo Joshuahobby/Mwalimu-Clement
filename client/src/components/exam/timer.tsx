@@ -15,12 +15,29 @@ interface TimerProps {
 const TWENTY_MINUTES = 20 * 60 * 1000; // 20 minutes in milliseconds
 const HEARTBEAT_INTERVAL = 30 * 1000; // Send heartbeat every 30 seconds
 
-const Timer = ({ onTimeUp, isPaused = false, simulationId, recoveryToken, onRecoveryTokenUpdate }: TimerProps) => {
-  const [timeLeft, setTimeLeft] = useState(TWENTY_MINUTES);
+const Timer: React.FC<TimerProps> = ({ 
+  startTime, 
+  duration = TWENTY_MINUTES,
+  onTimeUp, 
+  isPaused = false, 
+  simulationId, 
+  recoveryToken, 
+  onRecoveryTokenUpdate 
+}) => {
+  const [timeLeft, setTimeLeft] = useState(duration);
   const [warningShown, setWarningShown] = useState(false);
   const timerRef = useRef<NodeJS.Timeout>();
   const heartbeatRef = useRef<NodeJS.Timeout>();
   const { toast } = useToast();
+
+  useEffect(() => {
+    // Calculate initial time left based on start time and duration
+    const start = new Date(startTime).getTime();
+    const now = new Date().getTime();
+    const elapsed = now - start;
+    const remaining = Math.max(0, duration - elapsed);
+    setTimeLeft(remaining);
+  }, [startTime, duration]);
 
   // Send heartbeat to server
   const sendHeartbeat = async () => {
@@ -59,7 +76,7 @@ const Timer = ({ onTimeUp, isPaused = false, simulationId, recoveryToken, onReco
       clearInterval(heartbeatRef.current);
     }
 
-    if (!isPaused) {
+    if (!isPaused && timeLeft > 0) {
       // Set up timer interval
       timerRef.current = setInterval(() => {
         setTimeLeft((prevTime) => {
@@ -68,6 +85,11 @@ const Timer = ({ onTimeUp, isPaused = false, simulationId, recoveryToken, onReco
           // Show warning when 5 minutes remaining
           if (!warningShown && newTime <= 5 * 60 * 1000) {
             setWarningShown(true);
+            toast({
+              title: "Time Warning",
+              description: "5 minutes remaining!",
+              variant: "destructive",
+            });
           }
 
           // Handle time up
@@ -88,7 +110,7 @@ const Timer = ({ onTimeUp, isPaused = false, simulationId, recoveryToken, onReco
         });
       }, 1000);
 
-      // Set up heartbeat interval
+      // Set up heartbeat interval if simulation mode
       if (simulationId) {
         sendHeartbeat(); // Initial heartbeat
         heartbeatRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
@@ -104,7 +126,7 @@ const Timer = ({ onTimeUp, isPaused = false, simulationId, recoveryToken, onReco
         clearInterval(heartbeatRef.current);
       }
     };
-  }, [onTimeUp, isPaused, warningShown, simulationId]);
+  }, [onTimeUp, isPaused, timeLeft, warningShown, simulationId]);
 
   const minutes = Math.floor(timeLeft / 60000);
   const seconds = Math.floor((timeLeft % 60000) / 1000);
