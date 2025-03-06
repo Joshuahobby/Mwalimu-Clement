@@ -20,6 +20,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Timer as TimerComponent } from '../components/exam/timer';
+import { QuestionNavigation as QuestionNavigationComponent } from '../components/exam/question-navigation';
+import { QuestionCard as QuestionCardComponent } from '../components/exam/question-card';
+
 
 export default function ExamPage() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -145,7 +149,7 @@ export default function ExamPage() {
       description: "Your exam time has expired. Your answers will be submitted automatically.",
       variant: "destructive",
     });
-    
+
     // Give the user a moment to see the message before submitting
     setTimeout(() => {
       submitMutation.mutate();
@@ -181,11 +185,7 @@ export default function ExamPage() {
     );
   }
 
-  // Import components
-  import { Timer } from '../components/exam/timer';
-  import { QuestionNavigation } from '../components/exam/question-navigation';
-  import { QuestionCard } from '../components/exam/question-card';
-  
+
   return (
     <div className="container mx-auto px-4 py-6">
       <div className="flex flex-col gap-6 md:flex-row">
@@ -193,13 +193,13 @@ export default function ExamPage() {
         <div className="flex-1">
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl font-bold">Driving Theory Exam</h1>
-            <Timer 
+            <TimerComponent 
               initialTimeInMinutes={30} 
               onTimeUp={handleTimeUp}
               className="ml-auto"
             />
           </div>
-          
+
           {/* Progress bar */}
           <div className="mb-6">
             <div className="flex justify-between text-sm text-muted-foreground mb-2">
@@ -208,30 +208,34 @@ export default function ExamPage() {
             </div>
             <Progress value={progress} className="h-2" />
           </div>
-          
+
           {/* Current question */}
-          {exam && questionDetails && (
-            <QuestionCard
-              question={questionDetails}
+          {exam && questions && questions.length > currentQuestionIndex && (
+            <QuestionCardComponent
+              question={questions[currentQuestionIndex]}
               currentIndex={currentQuestionIndex}
               totalQuestions={exam.questions.length}
               selectedAnswer={answers[currentQuestionIndex]}
-              onAnswerSelect={(value) => handleAnswerSelect(value)}
+              onAnswerSelect={(value) => {
+                const newAnswers = [...answers];
+                newAnswers[currentQuestionIndex] = value;
+                setAnswers(newAnswers);
+              }}
             />
           )}
-          
+
           {/* Navigation buttons */}
           <div className="flex justify-between mt-6">
             <Button
               variant="outline"
-              onClick={handlePreviousQuestion}
+              onClick={() => setCurrentQuestionIndex(Math.max(0, currentQuestionIndex - 1))}
               disabled={currentQuestionIndex === 0}
             >
               Previous
             </Button>
-            
+
             {currentQuestionIndex < (exam?.questions.length || 0) - 1 ? (
-              <Button onClick={handleNextQuestion}>
+              <Button onClick={() => setCurrentQuestionIndex(currentQuestionIndex + 1)}>
                 Next
               </Button>
             ) : (
@@ -245,16 +249,16 @@ export default function ExamPage() {
             )}
           </div>
         </div>
-        
+
         {/* Sidebar */}
         <div className="w-full md:w-64 space-y-4">
-          <QuestionNavigation
+          <QuestionNavigationComponent
             totalQuestions={exam?.questions.length || 0}
             currentQuestion={currentQuestionIndex}
             answers={answers}
             onQuestionSelect={(index) => setCurrentQuestionIndex(index)}
           />
-          
+
           <Card>
             <CardContent className="p-4">
               <div className="space-y-2">
@@ -267,7 +271,7 @@ export default function ExamPage() {
                   <span className="font-medium">{answers.filter(a => a === -1).length}</span>
                 </div>
               </div>
-              
+
               <Button 
                 variant="destructive" 
                 className="w-full mt-4"
@@ -279,7 +283,7 @@ export default function ExamPage() {
           </Card>
         </div>
       </div>
-      
+
       {/* Confirmation dialog */}
       <Dialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>
         <DialogContent>
@@ -368,7 +372,7 @@ export default function ExamPage() {
                       <Clock className="h-5 w-5 text-primary" />
                       <h3 className="font-semibold">Time Remaining</h3>
                     </div>
-                    <Timer
+                    <TimerComponent
                       startTime={examStartTime.toISOString()}
                       duration={20 * 60 * 1000}
                       onTimeUp={handleTimeUp}
@@ -410,7 +414,7 @@ export default function ExamPage() {
             <Card className="mb-6">
               <CardContent className="p-6">
                 {currentQuestion && (
-                  <QuestionCard
+                  <QuestionCardComponent
                     question={currentQuestion}
                     selectedAnswer={answers[currentQuestionIndex]}
                     onAnswer={(answerIndex) => {
@@ -428,14 +432,14 @@ export default function ExamPage() {
             <div className="flex justify-between gap-4">
               <Button
                 variant="outline"
-                onClick={() => setCurrentQuestionIndex(i => i - 1)}
+                onClick={() => setCurrentQuestionIndex(i => Math.max(0, i - 1))}
                 disabled={currentQuestionIndex === 0}
                 className="w-[120px]"
               >
                 Previous
               </Button>
               <Button
-                onClick={() => setCurrentQuestionIndex(i => i + 1)}
+                onClick={() => setCurrentQuestionIndex(i => Math.min(exam.questions.length -1, i + 1))}
                 disabled={currentQuestionIndex === exam.questions.length - 1}
                 className="w-[120px]"
               >
@@ -449,7 +453,7 @@ export default function ExamPage() {
             <Card>
               <CardContent className="p-6">
                 <h3 className="font-semibold mb-4">Question Navigator</h3>
-                <QuestionNavigation
+                <QuestionNavigationComponent
                   totalQuestions={exam.questions.length}
                   currentQuestion={currentQuestionIndex}
                   answers={answers}
