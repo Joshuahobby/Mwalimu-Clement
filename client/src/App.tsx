@@ -16,11 +16,13 @@ import ProgressDashboard from "./pages/progress-dashboard";
 import { useEffect } from "react";
 import PaymentToastProvider from "@/components/notifications/payment-toast";
 import ExamResultsPage from "./pages/exam-results-page";
+import LandingPage from "@/pages/landing-page";
 
 function Router() {
   return (
     <Switch>
-      <ProtectedRoute path="/" component={HomePage} />
+      <Route path="/" component={LandingPage} />
+      <ProtectedRoute path="/dashboard" component={HomePage} />
       <ProtectedRoute path="/exam" component={ExamPage} />
       <ProtectedRoute path="/exam-simulation" component={ExamSimulationPage} />
       <ProtectedRoute path="/progress" component={ProgressDashboard} />
