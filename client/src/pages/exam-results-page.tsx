@@ -105,8 +105,8 @@ const ExamResultsPage = () => {
     );
   }
 
-  const correctAnswers = exam.score ? Math.round((exam.score / 100) * 20) : 0;
-  const passed = exam.score >= 70; // 70% is 14/20
+  const correctAnswers = exam.score != null ? Math.round((exam.score / 100) * 20) : 0;
+  const passed = exam.score != null && exam.score >= 70; // 70% is 14/20
   const examDate = new Date(exam.endTime || exam.startTime);
 
   return (
