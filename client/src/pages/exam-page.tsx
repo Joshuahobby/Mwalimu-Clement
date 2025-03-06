@@ -9,6 +9,9 @@ import Timer from "@/components/exam/timer";
 import QuestionNavigation from "@/components/exam/question-navigation";
 import AccessibilitySettings from "@/components/exam/accessibility-settings";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Progress } from "@/components/ui/progress";
+import { Card, CardContent } from "@/components/ui/card";
+import { AlertCircle, Clock, Info } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -139,6 +142,9 @@ export default function ExamPage() {
     submitMutation.mutate();
   };
 
+  // Calculate progress
+  const progress = answers ? (answers.filter(a => a !== -1).length / answers.length) * 100 : 0;
+
   // Show loading state
   if (examLoading || questionsLoading || startExamMutation.isPending) {
     return (
@@ -214,66 +220,130 @@ export default function ExamPage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-8">
-          {examStartTime && (
-            <Timer
-              startTime={examStartTime.toISOString()}
-              duration={20 * 60 * 1000}
-              onTimeUp={handleTimeUp}
-            />
-          )}
-          <AccessibilitySettings />
+        {/* Header Section */}
+        <div className="mb-8">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+            <div className="flex items-center gap-4 w-full md:w-auto">
+              {examStartTime && (
+                <Card className="flex-1 md:flex-none">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Clock className="h-5 w-5 text-primary" />
+                      <h3 className="font-semibold">Time Remaining</h3>
+                    </div>
+                    <Timer
+                      startTime={examStartTime.toISOString()}
+                      duration={20 * 60 * 1000}
+                      onTimeUp={handleTimeUp}
+                    />
+                  </CardContent>
+                </Card>
+              )}
+              <AccessibilitySettings />
+            </div>
+
+            <Card className="w-full md:w-auto">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Info className="h-5 w-5 text-primary" />
+                  <h3 className="font-semibold">Progress</h3>
+                </div>
+                <div className="flex items-center gap-4">
+                  <Progress value={progress} className="w-[200px]" />
+                  <span className="text-sm font-medium">
+                    {Math.round(progress)}%
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Question counter */}
+          <div className="text-sm text-muted-foreground mb-4">
+            Question {currentQuestionIndex + 1} of {exam?.questions.length}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* Main Content Area */}
           <div className="md:col-span-2">
-            <QuestionCard
-              question={currentQuestion}
-              selectedAnswer={answers[currentQuestionIndex]}
-              onAnswer={(answerIndex) => {
-                setAnswers(prev => {
-                  const newAnswers = [...prev];
-                  newAnswers[currentQuestionIndex] = answerIndex;
-                  return newAnswers;
-                });
-              }}
-            />
+            <Card className="mb-6">
+              <CardContent className="p-6">
+                {currentQuestion && (
+                  <QuestionCard
+                    question={currentQuestion}
+                    selectedAnswer={answers[currentQuestionIndex]}
+                    onAnswer={(answerIndex) => {
+                      setAnswers(prev => {
+                        const newAnswers = [...prev];
+                        newAnswers[currentQuestionIndex] = answerIndex;
+                        return newAnswers;
+                      });
+                    }}
+                  />
+                )}
+              </CardContent>
+            </Card>
 
-            <div className="flex justify-between mt-4">
+            <div className="flex justify-between gap-4">
               <Button
+                variant="outline"
                 onClick={() => setCurrentQuestionIndex(i => i - 1)}
                 disabled={currentQuestionIndex === 0}
+                className="w-[120px]"
               >
                 Previous
               </Button>
               <Button
                 onClick={() => setCurrentQuestionIndex(i => i + 1)}
                 disabled={currentQuestionIndex === exam.questions.length - 1}
+                className="w-[120px]"
               >
                 Next
               </Button>
             </div>
           </div>
 
-          <div>
-            <QuestionNavigation
-              totalQuestions={exam.questions.length}
-              currentQuestion={currentQuestionIndex}
-              answers={answers}
-              onQuestionSelect={setCurrentQuestionIndex}
-            />
+          {/* Sidebar */}
+          <div className="space-y-6">
+            <Card>
+              <CardContent className="p-6">
+                <h3 className="font-semibold mb-4">Question Navigator</h3>
+                <QuestionNavigation
+                  totalQuestions={exam.questions.length}
+                  currentQuestion={currentQuestionIndex}
+                  answers={answers}
+                  onQuestionSelect={setCurrentQuestionIndex}
+                />
+              </CardContent>
+            </Card>
 
-            <Button
-              className="w-full mt-4"
-              onClick={handleSubmit}
-              disabled={submitMutation.isPending}
-            >
-              {submitMutation.isPending ? "Submitting..." : "Submit Exam"}
-            </Button>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-start gap-3 mb-4">
+                  <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="font-semibold mb-1">Important</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Make sure to review all questions before submitting. 
+                      Unanswered questions will be marked as incorrect.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  className="w-full"
+                  onClick={handleSubmit}
+                  disabled={submitMutation.isPending}
+                >
+                  {submitMutation.isPending ? "Submitting..." : "Submit Exam"}
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
 
+      {/* Confirmation Dialog */}
       <Dialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>
         <DialogContent>
           <DialogHeader>
