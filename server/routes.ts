@@ -584,18 +584,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Get questions for the exam using Drizzle query builder
+      // Get questions for the exam using proper array handling
       const examQuestions = await db
         .select()
         .from(questions)
-        .where(sql`id = ANY(${exam.questions})`);
+        .where(sql`id = ANY(${sql.array(exam.questions, 'int4')})`);
 
-      if (!Array.isArray(examQuestions) || examQuestions.length !== exam.questions.length) {
+      if (!examQuestions || examQuestions.length !== exam.questions.length) {
         console.error('Question fetch mismatch:', {
-          fetchedCount: examQuestions.length,
+          fetchedCount: examQuestions?.length || 0,
           expectedCount: exam.questions.length,
           examQuestions: exam.questions,
-          fetchedIds: examQuestions.map(q => q.id)
+          fetchedIds: examQuestions?.map(q => q.id) || []
         });
         throw new Error('Failed to fetch all exam questions');
       }
@@ -981,7 +981,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Check if payment has expired
           const validUntil = new Date(payment.validUntil);
           if (validUntil < new Date()) {
-            consolewarn('Payment verified but already expired:', payment.id);
+            console.warn('Payment verified but already expired:', payment.id);
             let newValidUntil = new Date();
             switch (payment.packageType) {
               case "single": newValidUntil.setHours(newValidUntil.getHours() + 1); break;
