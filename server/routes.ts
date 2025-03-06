@@ -584,12 +584,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Get questions for the exam using a parameterized query
+      // Get questions for the exam using SQL
       const questionIds = exam.questions.map(String);
-      const examQuestions = await db
-        .select()
-        .from(questions)
-        .where(sql`id = ANY(${sql.array(questionIds, 'int4')})`);
+      const placeholders = questionIds.map((_, i) => `$${i + 1}`).join(', ');
+      const questionIdsList = questionIds.map(Number);
+      
+      const examQuestions = await db.execute(
+        `SELECT * FROM questions WHERE id IN (${placeholders})`,
+        questionIdsList
+      );
 
       if (examQuestions.length !== exam.questions.length) {
         console.error('Question fetch mismatch:', {
