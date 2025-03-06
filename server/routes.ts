@@ -625,16 +625,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate score (percentage)
       const score = Math.round((correctCount / examQuestions.length) * 100);
 
-      // Update exam with answers and score using direct PostgreSQL array syntax
-      const [updatedExam] = await db.execute(
-        `UPDATE exams 
-         SET answers = $1::int[], 
-             score = $2, 
-             end_time = NOW() 
-         WHERE id = $3 
-         RETURNING *`,
-        [answers, score, examId]
-      );
+      // Update exam with answers and score
+      const [updatedExam] = await db
+        .update(exams)
+        .set({
+          answers: answers,
+          score: score,
+          endTime: new Date()
+        })
+        .where(eq(exams.id, examId))
+        .returning();
 
       if (!updatedExam) {
         throw new Error('Failed to update exam record');
