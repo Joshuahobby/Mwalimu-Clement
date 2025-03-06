@@ -584,10 +584,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Get questions for the exam using proper PostgreSQL array syntax
+      // Get questions for the exam using direct SQL
+      const questionList = exam.questions.join(',');
       const examQuestions = await db.execute(
-        `SELECT * FROM questions WHERE id = ANY($1::int[])`,
-        [exam.questions]
+        `SELECT * FROM questions WHERE id IN (${questionList})`
       );
 
       if (!Array.isArray(examQuestions) || examQuestions.length !== exam.questions.length) {
