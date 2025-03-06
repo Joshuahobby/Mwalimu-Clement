@@ -546,7 +546,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update the exam patch endpoint
   app.patch("/api/exams/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
@@ -579,60 +578,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (answers.length !== exam.questions.length) {
         return res.status(400).json({ 
-          message: "Invalid answers array length" 
+          message: "Invalid answers array length",
+          expected: exam.questions.length,
+          received: answers.length
         });
       }
 
-      // Get questions for the exam using proper array handling
+      // Get questions for the exam using a parameterized query
+      const questionIds = exam.questions.map(String);
       const examQuestions = await db
         .select()
         .from(questions)
-        .where(sql`id = ANY(${sql.array(exam.questions, 'int4')})`);
+        .where(sql`id = ANY(${sql.array(questionIds, 'int4')})`);
 
       if (examQuestions.length !== exam.questions.length) {
-        console.error('Mismatch between questions fetched and exam questions:', {
+        console.error('Question fetch mismatch:', {
           fetchedCount: examQuestions.length,
           expectedCount: exam.questions.length,
-          examQuestions: exam.questions
+          examQuestions: exam.questions,
+          fetchedIds: examQuestions.map(q => q.id)
         });
         throw new Error('Failed to fetch all exam questions');
       }
 
-      // Calculate correct answers with proper type handling
-      const correctCount = examQuestions.reduce((count, question, index) => {
-        const answer = answers[index];
-        const correct = question.correctAnswer;
-        return count + (Number(answer) === Number(correct) ? 1 : 0);
-      }, 0);
+      // Create a map of question IDs to their correct answers
+      const questionMap = new Map(
+        examQuestions.map(q => [q.id, q.correctAnswer])
+      );
+
+      // Calculate correct answers with strict type checking
+      let correctCount = 0;
+      for (let i = 0; i < exam.questions.length; i++) {
+        const questionId = exam.questions[i];
+        const correctAnswer = questionMap.get(questionId);
+        const userAnswer = answers[i];
+
+        if (correctAnswer === undefined) {
+          console.error(`Missing question data for ID: ${questionId}`);
+          continue;
+        }
+
+        if (Number(userAnswer) === Number(correctAnswer)) {
+          correctCount++;
+        }
+      }
 
       // Calculate score (percentage)
       const score = Math.round((correctCount / examQuestions.length) * 100);
 
-      // Update exam with answers and score
+      // Update exam with answers and score using parameterized query
       const [updatedExam] = await db
         .update(exams)
         .set({
-          answers: sql`array[${sql.join(answers.map(a => sql.literal(a)), ',')}]::integer[]`,
+          answers: sql`ARRAY[${sql.join(answers.map(a => sql.literal(Number(a))), ',')}]::integer[]`,
           score,
           endTime: new Date()
         })
         .where(eq(exams.id, examId))
         .returning();
 
+      if (!updatedExam) {
+        throw new Error('Failed to update exam record');
+      }
+
       console.log('Exam completed:', {
         id: updatedExam.id,
         score: updatedExam.score,
         answers: updatedExam.answers,
-        questionCount: examQuestions.length
+        questionCount: examQuestions.length,
+        correctCount
       });
 
       res.json(updatedExam);
     } catch (error) {
-      console.error('Error updating exam:', error);
+      console.error('Error updating exam:', {
+        error,
+        stack: error instanceof Error ? error.stack : undefined,
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+
       res.status(500).json({ 
         message: "Failed to update exam",
         error: error instanceof Error ? error.message : "Unknown error",
-        details: process.env.NODE_ENV === 'development' ? error : undefined
+        details: process.env.NODE_ENV === 'development' ? {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined
+        } : undefined
       });
     }
   });
