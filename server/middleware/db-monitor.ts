@@ -70,20 +70,34 @@ class DatabaseMonitor {
   }
 
   public monitorQuery() {
-    // Store original query method
     const originalQuery = this.originalQuery;
+    const monitor = this;
 
-    // Return a wrapped version of the query method
-    return async function (...args: Parameters<typeof pool.query>) {
+    return function(...args: any[]) {
       const queryStart = Date.now();
-      try {
-        const result = await originalQuery.apply(pool, args);
-        const queryTime = Date.now() - queryStart;
-        dbMonitor.recordQuery(args[0], queryTime);
-        return result;
-      } catch (error) {
-        console.error('Query error:', error);
-        throw error;
+      const queryText = typeof args[0] === 'string' ? args[0] : args[0]?.text || 'unknown query';
+
+      // Handle both Promise-based and callback-based query calls
+      if (typeof args[args.length - 1] === 'function') {
+        // Callback style
+        const callback = args[args.length - 1];
+        args[args.length - 1] = function(err: Error | null, result: any) {
+          const queryTime = Date.now() - queryStart;
+          monitor.recordQuery(queryText, queryTime);
+          callback(err, result);
+        };
+        return originalQuery.apply(pool, args);
+      } else {
+        // Promise style
+        return originalQuery.apply(pool, args).then((result: any) => {
+          const queryTime = Date.now() - queryStart;
+          monitor.recordQuery(queryText, queryTime);
+          return result;
+        }).catch((error: Error) => {
+          const queryTime = Date.now() - queryStart;
+          monitor.recordQuery(queryText, queryTime);
+          throw error;
+        });
       }
     };
   }
