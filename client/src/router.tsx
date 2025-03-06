@@ -1,7 +1,2 @@
-
-import ExamReviewPage from "./pages/exam-review-page";
-
-// In the Switch component, add:
-<Route path="/exam-review">
-  <ExamReviewPage />
-</Route>
+// This file is no longer needed as routing is handled in App.tsx
+// Moving all route definitions to App.tsx for better organization

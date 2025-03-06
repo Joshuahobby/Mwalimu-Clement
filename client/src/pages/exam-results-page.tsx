@@ -6,12 +6,12 @@ import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Download, Trophy, XCircle } from "lucide-react";
+import { Download, Trophy, XCircle, ArrowLeft } from "lucide-react";
 import { jsPDF } from "jspdf";
 import { Exam } from "@shared/schema";
 
-// Helper function to generate PDF
-const generateResultPDF = (exam: Exam, correctAnswers: number, passed: boolean, examDate: Date) => {
+// Moved PDF generation to a separate utility function for better organization
+const generateResultPDF = (exam: Exam, correctAnswers: number, passed: boolean, examDate: Date): jsPDF => {
   const doc = new jsPDF();
 
   // Add header
@@ -61,6 +61,7 @@ const ExamResultsPage = () => {
   const { toast } = useToast();
   const [pdfGenerating, setPdfGenerating] = useState(false);
 
+  // Fetch exam data with proper type safety
   const { data: exam, isLoading } = useQuery<Exam>({
     queryKey: ["/api/exams", id],
     queryFn: async () => {
@@ -109,8 +110,36 @@ const ExamResultsPage = () => {
   const passed = exam.score != null && exam.score >= 70; // 70% is 14/20
   const examDate = new Date(exam.endTime || exam.startTime);
 
+  const handleGeneratePDF = async () => {
+    setPdfGenerating(true);
+    try {
+      const doc = generateResultPDF(exam, correctAnswers, passed, examDate);
+      doc.save(`driving-theory-results-${examDate.toISOString().split('T')[0]}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate PDF. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setPdfGenerating(false);
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-12">
+      <div className="mb-6">
+        <Button 
+          variant="ghost" 
+          onClick={() => setLocation("/")}
+          className="flex items-center"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Dashboard
+        </Button>
+      </div>
+
       <Card className="max-w-3xl mx-auto">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Exam Results</CardTitle>
@@ -162,36 +191,21 @@ const ExamResultsPage = () => {
             <Button 
               variant="default" 
               size="lg"
-              onClick={() => {
-                setPdfGenerating(true);
-                try {
-                  const doc = generateResultPDF(exam, correctAnswers, passed, examDate);
-                  doc.save(`driving-theory-results-${examDate.toISOString().split('T')[0]}.pdf`);
-                } catch (error) {
-                  console.error('Error generating PDF:', error);
-                  toast({
-                    title: "Error",
-                    description: "Failed to generate PDF. Please try again.",
-                    variant: "destructive",
-                  });
-                } finally {
-                  setPdfGenerating(false);
-                }
-              }}
+              onClick={handleGeneratePDF}
               disabled={pdfGenerating}
               className="flex items-center"
             >
               <Download className="mr-2 h-4 w-4" />
               {pdfGenerating ? "Generating PDF..." : "Download Results PDF"}
             </Button>
-            
+
             <Button 
               variant="secondary" 
               size="lg"
-              onClick={() => setLocation(`/exam-review?id=${exam.id}`)}
+              onClick={() => setLocation(`/exam-review/${exam.id}`)}
               className="flex items-center"
             >
-              <Search className="mr-2 h-4 w-4" />
+              <ArrowLeft className="mr-2 h-4 w-4" />
               Review Exam Questions
             </Button>
 
