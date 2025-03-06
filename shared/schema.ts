@@ -286,3 +286,50 @@ export type InsertExamSimulationLog = z.infer<typeof insertExamSimulationLogSche
 export type CustomPackage = typeof customPackages.$inferSelect;
 export type InsertCustomPackage = z.infer<typeof insertCustomPackageSchema>;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+
+// Add after the existing types
+export const auditActionTypes = [
+  "user_created",
+  "user_updated",
+  "user_deactivated",
+  "question_created",
+  "question_updated",
+  "question_deleted",
+  "payment_updated",
+  "setting_updated",
+  "role_updated",
+  "bulk_action_performed"
+] as const;
+export type AuditActionType = typeof auditActionTypes[number];
+
+// Add after the other table definitions
+export const auditLogs = pgTable("audit_logs", {
+  id: serial("id").primaryKey(),
+  adminId: integer("admin_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  actionType: text("action_type", { enum: auditActionTypes }).notNull(),
+  targetType: text("target_type").notNull(), // e.g., "user", "question", "payment"
+  targetId: integer("target_id"), // Optional as some actions might not have a specific target
+  details: json("details").$type<{
+    before?: Record<string, unknown>;
+    after?: Record<string, unknown>;
+    message?: string;
+    additionalInfo?: Record<string, unknown>;
+  }>(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  adminIdIdx: index("audit_log_admin_id_idx").on(table.adminId),
+  actionTypeIdx: index("audit_log_action_type_idx").on(table.actionType),
+  createdAtIdx: index("audit_log_created_at_idx").on(table.createdAt),
+  // Fix the compound index definition
+  targetTypeIdIdx: index("audit_log_target_type_id_idx").on(table.targetType)
+}));
+
+// Add after other export types
+export type AuditLog = typeof auditLogs.$inferSelect;
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;

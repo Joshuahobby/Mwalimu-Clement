@@ -34,6 +34,7 @@ import {
   Filter,
   Download,
   Upload,
+  MoreHorizontal,
 } from "lucide-react";
 import {
   Select,
@@ -63,6 +64,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Table,
@@ -84,6 +86,7 @@ import { format } from "date-fns";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from 'lucide-react';
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 
 
 type AnalyticsData = {
@@ -127,7 +130,7 @@ type UserStats = {
   lastActive: string;
 };
 
-type AdminSection = "users" | "questions" | "pricing" | "payments" | "analytics" | "settings";
+type AdminSection = "users" | "questions" | "pricing" | "payments" | "analytics" | "settings" | "audit-logs";
 type PaymentStatus = "pending" | "completed" | "failed" | "refunded";
 type PricingPackage = {
   type: keyof typeof packagePrices;
@@ -211,6 +214,8 @@ export default function AdminPage() {
     end: new Date()
   });
   const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
+  const [actionTypeFilter, setActionTypeFilter] = useState<string>("all");
+
 
   if (!user) {
     return null;
@@ -529,6 +534,24 @@ export default function AdminPage() {
     },
   });
 
+  const { data: auditLogs, isLoading: auditLogsLoading } = useQuery<{
+    id: number;
+    createdAt: string;
+    adminId: number;
+    actionType: string;
+    targetType: string;
+    targetId?: number;
+    details?: { before?: any; after?: any; message?: string };
+    ipAddress: string;
+    userAgent: string;
+  }[]>(
+    ["/api/audit-logs", actionTypeFilter, dateRange.start.toISOString(), dateRange.end.toISOString()],
+    { enabled: activeSection === "audit-logs" }
+  );
+
+  const auditActionTypes = Array.from(new Set(auditLogs?.map((log) => log.actionType) || []));
+
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen">
@@ -604,6 +627,15 @@ export default function AdminPage() {
                 >
                   <LogOut className="h-4 w-4" />
                   <span>Logout</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => setActiveSection("audit-logs")}
+                  isActive={activeSection === "audit-logs"}
+                >
+                  <Filter className="h-4 w-4" />
+                  <span>Audit Logs</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -932,814 +964,323 @@ export default function AdminPage() {
                                       Exam Attempts: {userStats[user.id].examAttempts}
                                     </p>
                                     <p className="text-sm">
-                                      Success Rate: {userStats[user.id].successRate}%
+                                      Success Rate: {userStats[user.id].successRate.toFixed(2)}%
                                     </p>
                                     <p className="text-sm">
-                                      Last Active: {new Date(userStats[user.id].lastActive).toLocaleDateString()}
+                                      Last Active: {format(new Date(userStats[user.id].lastActive), 'PP')}
                                     </p>
                                   </div>
                                 )}
                               </TableCell>
                               <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                      setSelectedUser(user);
-                                      setIsResetPasswordOpen(true);
-                                    }}
-                                  >
-                                    Reset Password
-                                  </Button>
-                                  <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    onClick={() => {
-                                      setSelectedUser(user);
-                                      setIsDeactivateOpen(true);
-                                    }}
-                                  >
-                                    Deactivate
-                                  </Button>
-                                </div>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                      <span className="sr-only">Open menu</span>
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        setSelectedUser(user);
+                                        setIsResetPasswordOpen(true);
+                                      }}
+                                    >
+                                      Reset Password
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        setSelectedUser(user);
+                                        setIsDeactivateOpen(true);
+                                      }}
+                                    >
+                                      {user.isActive ? "Deactivate" : "Activate"}
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
                       </Table>
                     </div>
-
-                    {totalUserPages > 1 && (
-                      <div className="flex justify-center gap-2 mt-4">
-                        <Button
-                          variant="outline"
-                          onClick={() => setUserCurrentPage(p => Math.max(1, p - 1))}
-                          disabled={userCurrentPage === 1}
-                        >
-                          Previous
-                        </Button>
-                        <div className="flex items-center gap-2">
-                          {Array.from({ length: totalUserPages }, (_, i) => i + 1).map((page) => (
-                            <Button
-                              key={page}
-                              variant={userCurrentPage === page ? "default" : "outline"}
-                              onClick={() => setUserCurrentPage(page)}
-                            >
-                              {page}
-                            </Button>
-                          ))}
-                        </div>
-                        <Button
-                          variant="outline"
-                          onClick={() => setUserCurrentPage(p => Math.min(totalUserPages, p + 1))}
-                          disabled={userCurrentPage === totalUserPages}
-                        >
-                          Next
-                        </Button>
-                      </div>
-                    )}
                   </div>
                 </CardContent>
               </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Active Sessions</CardTitle>
-                  <CardDescription>Monitor and manage user sessions</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Username</TableHead>
-                        <TableHead>Last Activity</TableHead>
-                        <TableHead>IP Address</TableHead>
-                        <TableHead>Device</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {sessions?.map((session) => (
-                        <TableRow key={session.userId}>
-                          <TableCell>{session.username}</TableCell>
-                          <TableCell>{format(new Date(session.lastActivity), 'PPp')}</TableCell>
-                          <TableCell>{session.ipAddress}</TableCell>
-                          <TableCell>{session.device}</TableCell>
-                          <TableCell>
-                            <Badge variant={session.isActive ? "default" : "secondary"}>
-                              {session.isActive ? "Active" : "Inactive"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="destructive"
-                              size="sm"                              onClick={() => terminateSessionMutation.mutate(session.userId)}
-                              disabled={terminateSessionMutation.isPending}
-                            >
-                              Terminate Session
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {!sessions?.length && (
-                        <TableRow>
-                          <TableCell colSpan={6} className="text-center text-muted-foreground">
-                            No active sessions
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </div>
-          )}
 
-          <Dialog open={isResetPasswordOpen} onOpenChange={setIsResetPasswordOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Reset Password</DialogTitle>
-                <DialogDescription>
-                  Enter a new password for {selectedUser?.username}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="py-4">
-                <Input
-                  type="password"
-                  placeholder="New password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                />
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setIsResetPasswordOpen(false);
-                    setNewPassword("");
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => {
-                    if (selectedUser) {
-                      resetPasswordMutation.mutate({
-                        userId: selectedUser.id,
-                        password: newPassword,
-                      });
-                    }
-                  }}
-                  disabled={resetPasswordMutation.isPending || !newPassword}
-                >
-                  Reset Password
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              {totalUserPages > 1 && (
+                <div className="flex justify-center gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setUserCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={userCurrentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    {Array.from({ length: totalUserPages }, (_, i) => i + 1).map((page) => (
+                      <Button
+                        key={page}
+                        variant={userCurrentPage === page ? "default" : "outline"}
+                        onClick={() => setUserCurrentPage(page)}
+                      >
+                        {page}
+                      </Button>
+                    ))}
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => setUserCurrentPage(p => Math.min(totalUserPages, p + 1))}
+                    disabled={userCurrentPage === totalUserPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
 
-          <Dialog open={isDeactivateOpen} onOpenChange={setIsDeactivateOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Deactivate User</DialogTitle>
-                <DialogDescription>
-                  Are you sure you want to deactivate {selectedUser?.username}? This action cannot be undone.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setIsDeactivateOpen(false);
-                    setSelectedUser(null);
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => {
-                    if (selectedUser) {
-                      deactivateUserMutation.mutate(selectedUser.id);
-                    }
-                  }}
-                  disabled={deactivateUserMutation.isPending}
-                >
-                  Deactivate
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New User</DialogTitle>
-                <DialogDescription>
-                  Create a new user account. The user can change their password after first login.
-                </DialogDescription>
-              </DialogHeader>
-              <Form {...addUserForm}>
-                <form onSubmit={addUserForm.handleSubmit((data) => createUserMutation.mutate(data))} className="space-y-4">
-                  <FormField
-                    control={addUserForm.control}
-                    name="username"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Username</FormLabel>
-                        <FormControl>
-                          <Input {...field} autoComplete="off" />
-                        </FormControl>
-                        <FormDescription>
-                          Choose a unique username for the account
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={addUserForm.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Password</FormLabel>
-                        <FormControl>
-                          <Input type="password" {...field} autoComplete="new-password" />
-                        </FormControl>
-                        <FormDescription>
-                          Set a temporary password for the user
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={addUserForm.control}
-                    name="role"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Role</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a role" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="student">Student</SelectItem>
-                            <SelectItem value="instructor">Instructor</SelectItem>
-                            <SelectItem value="admin">Admin</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>
-                          Select the user's role and permissions
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+              <Dialog open={isResetPasswordOpen} onOpenChange={setIsResetPasswordOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Reset Password</DialogTitle>
+                    <DialogDescription>
+                      Enter a new password for {selectedUser?.username}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <Input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="New password"
                   />
                   <DialogFooter>
                     <Button
-                      type="submit"
-                      disabled={createUserMutation.isPending || !addUserForm.formState.isValid}
+                      onClick={() => {
+                        if (selectedUser) {
+                          resetPasswordMutation.mutate({
+                            userId: selectedUser.id,
+                            password: newPassword,
+                          });
+                        }
+                      }}
+                      disabled={resetPasswordMutation.isPending}
                     >
-                      {createUserMutation.isPending && (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      )}
-                      Create User
+                      Reset Password
                     </Button>
                   </DialogFooter>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
+                </DialogContent>
+              </Dialog>
 
-          {activeSection === "analytics" && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                  <Select
-                    value="30days"
-                    onValueChange={(value) => {
-                      const end = new Date();
-                      const start = new Date();
-                      switch (value) {
-                        case "7days":
-                          start.setDate(end.getDate() - 7);
-                          break;
-                        case "30days":
-                          start.setDate(end.getDate() - 30);
-                          break;
-                        case "90days":
-                          start.setDate(end.getDate() - 90);
-                          break;
-                      }
-                      setDateRange({ start, end });
-                    }}
-                  >
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Select date range" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="7days">Last 7 days</SelectItem>
-                      <SelectItem value="30days">Last 30 days</SelectItem>
-                      <SelectItem value="90days">Last 90 days</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button onClick={exportAnalytics} variant="outline">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export Report
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Exam Performance Trends</CardTitle>
-                    <CardDescription>Pass rates and average scores over time</CardDescription>
-                  </CardHeader>
-                  <CardContent className="h-[300px]">
-                    <LineChart
-                      width={500}
-                      height={300}
-                      data={analyticsData?.examCompletions}
-                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+              <Dialog open={isDeactivateOpen} onOpenChange={setIsDeactivateOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>
+                      {selectedUser?.isActive ? "Deactivate" : "Activate"} User
+                    </DialogTitle>
+                    <DialogDescription>
+                      Are you sure you want to {selectedUser?.isActive ? "deactivate" : "activate"} {selectedUser?.username}?
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button
+                      variant="destructive"
+                      onClick={() => {
+                        if (selectedUser) {
+                          deactivateUserMutation.mutate(selectedUser.id);
+                        }
+                      }}
+                      disabled={deactivateUserMutation.isPending}
                     >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis yAxisId="left" />
-                      <YAxis yAxisId="right" orientation="right" />
-                      <Tooltip />
-                      <Legend />
-                      <Line
-                        yAxisId="left"
-                        type="monotone"
-                        dataKey="averageScore"
-                        stroke="#8884d8"
-                        name="Average Score"
+                      {selectedUser?.isActive ? "Deactivate" : "Activate"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add New User</DialogTitle>
+                    <DialogDescription>
+                      Create a new user account
+                    </DialogDescription>
+                  </DialogHeader>
+                  <Form {...addUserForm}>
+                    <form onSubmit={addUserForm.handleSubmit((data) => createUserMutation.mutate(data))} className="space-y-4">
+                      <FormField
+                        control={addUserForm.control}
+                        name="username"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Username</FormLabel>
+                            <FormControl>
+                              <Input {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
-                      <Line
-                        yAxisId="right"
-                        type="monotone"
-                        dataKey={(data) => (data.passCount / data.count) * 100}
-                        stroke="#82ca9d"
-                        name="Pass Rate %"
+                      <FormField
+                        control={addUserForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Password</FormLabel>
+                            <FormControl>
+                              <Input type="password" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
-                    </LineChart>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Category Performance</CardTitle>
-                    <CardDescription>Success rates by exam category</CardDescription>
-                  </CardHeader>
-                  <CardContent className="h-[300px]">
-                    <BarChart
-                      width={500}
-                      height={300}
-                      data={analyticsData?.topCategories}
-                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="category" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="successRate" fill="#82ca9d" name="Success Rate %" />
-                      <Bar dataKey="attempts" fill="#8884d8" name="Total Attempts" />
-                    </BarChart>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>User Growth & Engagement</CardTitle>
-                    <CardDescription>New registrations and active users</CardDescription>
-                  </CardHeader>
-                  <CardContent className="h-[300px]">
-                    <LineChart
-                      width={500}
-                      height={300}
-                      data={analyticsData?.userRegistrations}
-                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Line
-                        type="monotone"
-                        dataKey="count"
-                        stroke="#82ca9d"
-                        name="New Users"
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="activeUsers"
-                        stroke="#8884d8"
-                        name="Active Users"
-                      />
-                    </LineChart>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Revenue Analysis</CardTitle>
-                    <CardDescription>Revenue trends by package type</CardDescription>
-                  </CardHeader>
-                  <CardContent className="h-[300px]">
-                    <BarChart
-                      width={500}
-                      height={300}
-                      data={analyticsData?.revenueData}
-                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="amount" fill="#8884d8" name="Revenue (RWF)" />
-                    </BarChart>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          )}
-
-          {activeSection === "payments" && (
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Payment Management</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-                    <div className="p-4 flex justify-between items-center border-b border-gray-100">
-                      <h3 className="font-medium text-gray-700">List of all payments</h3>
-                      <div className="flex space-x-2">
-                        <select className="custom-input max-w-[180px] h-9 text-sm" defaultValue="all">
-                          <option value="all">All Statuses</option>
-                          <option value="completed">Completed</option>
-                          <option value="pending">Pending</option>
-                          <option value="failed">Failed</option>
-                          <option value="refunded">Refunded</option>
-                        </select>
-                      </div>
-                    </div>
-                    <Table className="admin-table">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-16">ID</TableHead>
-                          <TableHead>User</TableHead>
-                          <TableHead>Package</TableHead>
-                          <TableHead>Amount</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {payments?.map((payment) => (
-                          <TableRow key={payment.id}>
-                            <TableCell className="font-mono text-xs">{payment.id}</TableCell>
-                            <TableCell className="font-medium">{payment.username}</TableCell>
-                            <TableCell>
-                              <span className="capitalize">{payment.packageType}</span>
-                            </TableCell>
-                            <TableCell className="font-medium">{payment.amount} RWF</TableCell>
-                            <TableCell>{format(new Date(payment.createdAt), 'PPP')}</TableCell>
-                            <TableCell>
-                              <div className={`inline-flex px-2 py-1 rounded-full text-xs font-medium 
-                                ${payment.status === 'completed' ? 'bg-green-100 text-green-800' : 
-                                  payment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
-                                  payment.status === 'failed' ? 'bg-red-100 text-red-800' :
-                                  'bg-gray-100 text-gray-800'}`}>
-                                {payment.status}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Select
-                                value={payment.status}
-                                onValueChange={(status: PaymentStatus) =>
-                                  updatePaymentStatusMutation.mutate({
-                                    paymentId: payment.id,
-                                    status,
-                                  })
-                                }
-                              >
-                                <SelectTrigger className="w-[130px]">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="pending">Pending</SelectItem>
-                                  <SelectItem value="completed">Completed</SelectItem>
-                                  <SelectItem value="failed">Failed</SelectItem>
-                                  <SelectItem value="refunded">Refunded</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </TableCell>
-                            <TableCell>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm">
-                                    Actions
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      updatePaymentStatusMutation.mutate({
-                                        paymentId: payment.id,
-                                        status: "completed",
-                                      })
-                                    }
-                                  >
-                                    Mark as Completed
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      updatePaymentStatusMutation.mutate({
-                                        paymentId: payment.id,
-                                        status: "refunded",
-                                      })
-                                    }
-                                  >
-                                    Process Refund
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {activeSection === "pricing" && (
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Package Pricing Management</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableCaption>Manage pricing for different packages</TableCaption>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Package</TableHead>
-                        <TableHead>Current Price (RWF)</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {[
-                        { type: "single", name: "Single Exam" },
-                        { type: "daily", name: "Daily Access" },
-                        { type: "weekly", name: "Weekly Access" },
-                        { type: "monthly", name: "Monthly Access" },
-                      ].map((pkg) => (
-                        <TableRow key={pkg.type}>
-                          <TableCell className="font-medium">{pkg.name}</TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              defaultValue={packagePrices[pkg.type as keyof typeof packagePrices]}
-                              onChange={(e) => {
-                                const price = parseInt(e.target.value);
-                                if (!isNaN(price) && price >= 0) {
-                                  updatePricingMutation.mutate({
-                                    type: pkg.type,
-                                    price,
-                                    isEnabled: true,
-                                  });
-                                }
-                              }}
-                              className="w-32"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Switch
-                              defaultChecked={true}
-                              disabled={updatePricingMutation.isPending}
-                              onCheckedChange={(isEnabled) => {
-                                updatePricingMutation.mutate({
-                                  type: pkg.type,
-                                  price: packagePrices[pkg.type as keyof typeof packagePrices],
-                                  isEnabled,
-                                });
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                updatePricingMutation.mutate({
-                                  type: pkg.type,
-                                  price: packagePrices[pkg.type as keyof typeof packagePrices],
-                                  isEnabled: true,
-                                });
-                              }}
+                      <FormField
+                        control={addUserForm.control}
+                        name="role"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Role</FormLabel>
+                            <Select 
+                              onValueChange={field.onChange} 
+                              defaultValue={field.value}
                             >
-                              Reset to Default
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Pricing History</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableCaption>Recent price changes</TableCaption>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Package</TableHead>
-                        <TableHead>Old Price</TableHead>
-                        <TableHead>New Price</TableHead>
-                        <TableHead>Changed By</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center text-muted-foreground">
-                          No recent changes
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select a role" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="student">Student</SelectItem>
+                                <SelectItem value="instructor">Instructor</SelectItem>
+                                <SelectItem value="admin">Admin</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <DialogFooter>
+                        <Button type="submit" disabled={createUserMutation.isPending}>
+                          {createUserMutation.isPending && (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          )}
+                          Create User
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </Form>
+                </DialogContent>
+              </Dialog>
             </div>
           )}
 
-          {(activeSection === "settings") && (
+          {activeSection === "audit-logs" && (
             <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>System Settings</CardTitle>
-                  <CardDescription>Configure core system settings and preferences</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <h3 className="text-base font-medium">Email Notifications</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Receive email notifications for important system events
-                        </p>
-                      </div>
-                      <Switch
-                        defaultChecked={true}
-                        onCheckedChange={(checked) => {
-                          toast({
-                            title: `Email notifications ${checked ? 'enabled' : 'disabled'}`,
-                            description: "Your preferences have been saved",
-                          });
-                        }}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <h3 className="text-base font-medium">Automatic User Approval</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Automatically approve new user registrations
-                        </p>
-                      </div>
-                      <Switch
-                        defaultChecked={false}
-                        onCheckedChange={(checked) => {
-                          toast({
-                            title: `Automatic approval ${checked ? 'enabled' : 'disabled'}`,
-                            description: "Your preferences have been saved",
-                          });
-                        }}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <h3 className="text-base font-medium">Maintenance Mode</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Put the application in maintenance mode
-                        </p>
-                      </div>
-                      <Switch
-                        defaultChecked={false}
-                        onCheckedChange={(checked) => {
-                          toast({
-                            title: `Maintenance mode ${checked ? 'enabled' : 'disabled'}`,
-                            description: "System status updated",
-                          });
-                        }}
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Database Management</CardTitle>
-                  <CardDescription>Manage database operations and maintenance</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        toast({
-                          title: "Backup initiated",
-                          description: "Database backup process started",
-                        });
-                      }}
-                    >
-                      Create Backup
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        toast({
-                          title: "Optimization started",
-                          description: "Database optimization in progress",
-                        });
-                      }}
-                    >
-                      Optimize Database
-                    </Button>
-                  </div>
-                  <div className="pt-4">
-                    <h4 className="text-sm font-medium mb-2">Recent Backups</h4>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Size</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        <TableRow>
-                          <TableCell>{format(new Date(), 'PPP')}</TableCell>
-                          <TableCell>2.3 MB</TableCell>
-                          <TableCell>
-                            <Badge>Completed</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Button variant="ghost" size="sm">Download</Button>
-                          </TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>System Information</CardTitle>
-                  <CardDescription>View system status and information</CardDescription>
+                  <CardTitle>Audit Logs</CardTitle>
+                  <CardDescription>Track and monitor administrative actions</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <h4 className="text-sm font-medium mb-1">System Version</h4>
-                        <p className="text-sm text-muted-foreground">1.0.0</p>
+                    {/* Filters */}
+                    <div className="flex flex-wrap gap-4">
+                      <div className="flex-1">
+                        <Select onValueChange={(value) => setActionTypeFilter(value)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Filter by action" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Actions</SelectItem>
+                            {auditActionTypes.map((type) => (
+                              <SelectItem key={type} value={type}>
+                                {type.replace(/_/g, ' ').toUpperCase()}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
-                      <div>
-                        <h4 className="text-sm font-medium mb-1">Last Updated</h4>
-                        <p className="text-sm text-muted-foreground">{format(new Date(), 'PPP')}</p>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-medium mb-1">Active Users</h4>
-                        <p className="text-sm text-muted-foreground">143</p>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-medium mb-1">Storage Used</h4>
-                        <p className="text-sm text-muted-foreground">1.2 GB</p>
-                      </div>
+                      <DateRangePicker
+                        from={dateRange.start}
+                        to={dateRange.end}
+                        onSelect={(range) => {
+                          if (range?.from && range?.to) {
+                            setDateRange({ start: range.from, end: range.to });
+                          }
+                        }}
+                      />
+                    </div>
+
+                    {/* Audit Log Table */}
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Timestamp</TableHead>
+                            <TableHead>Admin</TableHead>
+                            <TableHead>Action</TableHead>
+                            <TableHead>Target</TableHead>
+                            <TableHead>Details</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {auditLogs?.map((log) => (
+                            <TableRow key={log.id}>
+                              <TableCell>
+                                {format(new Date(log.createdAt), 'PP p')}
+                              </TableCell>
+                              <TableCell>{log.adminId}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline">
+                                  {log.actionType.replace(/_/g, ' ').toUpperCase()}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {log.targetType} {log.targetId && `#${log.targetId}`}
+                              </TableCell>
+                              <TableCell>
+                                <Dialog>
+                                  <DialogTrigger asChild>
+                                    <Button variant="ghost" size="sm">
+                                      View Details
+                                    </Button>
+                                  </DialogTrigger>
+                                  <DialogContent>
+                                    <DialogHeader>
+                                      <DialogTitle>Audit Log Details</DialogTitle>
+                                    </DialogHeader>
+                                    <div className="space-y-4">
+                                      <div>
+                                        <h4 className="font-medium">Before:</h4>
+                                        <pre className="mt-2 rounded bg-muted p-4">
+                                          <code>
+                                            {JSON.stringify(log.details?.before, null, 2)}
+                                          </code>
+                                        </pre>
+                                      </div>
+                                      <div>
+                                        <h4 className="font-medium">After:</h4>
+                                        <pre className="mt-2 rounded bg-muted p-4">
+                                          <code>
+                                            {JSON.stringify(log.details?.after, null, 2)}
+                                          </code>
+                                        </pre>
+                                      </div>
+                                      {log.details?.message && (
+                                        <div>
+                                          <h4 className="font-medium">Message:</h4>
+                                          <p className="mt-2">{log.details.message}</p>
+                                        </div>
+                                      )}
+                                      <div className="text-sm text-muted-foreground">
+                                        <p>IP Address: {log.ipAddress}</p>
+                                        <p>User Agent: {log.userAgent}</p>
+                                      </div>
+                                    </div>
+                                  </DialogContent>
+                                </Dialog>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
                   </div>
                 </CardContent>

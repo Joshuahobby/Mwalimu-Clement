@@ -1,4 +1,4 @@
-import { User, InsertUser, Question, Exam, Payment, Settings, PackageType, users, questions, exams, payments, settings } from "@shared/schema";
+import { User, InsertUser, Question, Exam, Payment, Settings, PackageType, users, questions, exams, payments, settings, AuditLog, InsertAuditLog, AuditActionType, auditLogs } from "@shared/schema";
 import { db } from "./db";
 import session from "express-session";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -43,6 +43,19 @@ export interface IStorage {
   // Settings operations
   getSetting(key: string): Promise<Settings | undefined>;
   setSetting(key: string, value: any): Promise<Settings>;
+
+  // Audit log operations
+  createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
+  getAuditLogs(options: {
+    adminId?: number;
+    actionType?: AuditActionType;
+    targetType?: string;
+    targetId?: number;
+    startDate?: Date;
+    endDate?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<AuditLog[]>;
 
   sessionStore: session.Store;
 }
@@ -221,6 +234,63 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return setting;
+  }
+
+  async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
+    try {
+      const [newLog] = await db.insert(auditLogs).values([log]).returning();
+      return newLog;
+    } catch (error) {
+      console.error('Error creating audit log:', error);
+      throw new Error('Failed to create audit log');
+    }
+  }
+
+  async getAuditLogs(options: {
+    adminId?: number;
+    actionType?: AuditActionType;
+    targetType?: string;
+    targetId?: number;
+    startDate?: Date;
+    endDate?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<AuditLog[]> {
+    let baseQuery = db.select().from(auditLogs);
+
+    const conditions = [];
+
+    if (options.adminId) {
+      conditions.push(eq(auditLogs.adminId, options.adminId));
+    }
+    if (options.actionType) {
+      conditions.push(eq(auditLogs.actionType, options.actionType));
+    }
+    if (options.targetType) {
+      conditions.push(eq(auditLogs.targetType, options.targetType));
+    }
+    if (options.targetId) {
+      conditions.push(eq(auditLogs.targetId, options.targetId));
+    }
+    if (options.startDate) {
+      conditions.push(sql`${auditLogs.createdAt} >= ${options.startDate}`);
+    }
+    if (options.endDate) {
+      conditions.push(sql`${auditLogs.createdAt} <= ${options.endDate}`);
+    }
+
+    if (conditions.length > 0) {
+      baseQuery = baseQuery.where(and(...conditions));
+    }
+
+    if (options.limit) {
+      baseQuery = baseQuery.limit(options.limit);
+    }
+    if (options.offset) {
+      baseQuery = baseQuery.offset(options.offset);
+    }
+
+    return baseQuery.orderBy(desc(auditLogs.createdAt));
   }
 }
 
