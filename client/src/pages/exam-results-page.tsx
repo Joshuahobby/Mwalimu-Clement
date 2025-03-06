@@ -158,7 +158,7 @@ const ExamResultsPage = () => {
             </div>
           </div>
 
-          <div className="mt-8 flex justify-center space-x-4">
+          <div className="mt-8 flex flex-col md:flex-row justify-center md:space-x-4 space-y-4 md:space-y-0">
             <Button 
               variant="default" 
               size="lg"
@@ -183,6 +183,16 @@ const ExamResultsPage = () => {
             >
               <Download className="mr-2 h-4 w-4" />
               {pdfGenerating ? "Generating PDF..." : "Download Results PDF"}
+            </Button>
+            
+            <Button 
+              variant="secondary" 
+              size="lg"
+              onClick={() => setLocation(`/exam-review?id=${exam.id}`)}
+              className="flex items-center"
+            >
+              <Search className="mr-2 h-4 w-4" />
+              Review Exam Questions
             </Button>
 
             <Button 

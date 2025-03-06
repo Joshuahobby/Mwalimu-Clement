@@ -147,3 +147,69 @@ const Timer: React.FC<TimerProps> = ({
 };
 
 export default Timer;
+import React, { useState, useEffect, useCallback } from 'react';
+import { CircleOff, Clock } from 'lucide-react';
+
+interface TimerProps {
+  initialTimeInMinutes: number;
+  onTimeUp: () => void;
+  isPaused?: boolean;
+  className?: string;
+}
+
+export function Timer({ initialTimeInMinutes, onTimeUp, isPaused = false, className = '' }: TimerProps) {
+  const [timeRemaining, setTimeRemaining] = useState(initialTimeInMinutes * 60);
+  const [isActive, setIsActive] = useState(true);
+
+  const formatTime = useCallback((seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }, []);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+
+    if (isActive && timeRemaining > 0 && !isPaused) {
+      interval = setInterval(() => {
+        setTimeRemaining((prevTime) => {
+          if (prevTime <= 1) {
+            if (interval) clearInterval(interval);
+            setIsActive(false);
+            onTimeUp();
+            return 0;
+          }
+          return prevTime - 1;
+        });
+      }, 1000);
+    } else if (timeRemaining <= 0) {
+      setIsActive(false);
+      onTimeUp();
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [timeRemaining, isActive, onTimeUp, isPaused]);
+
+  // Calculate color based on remaining time
+  const getTimerColor = () => {
+    const percentage = (timeRemaining / (initialTimeInMinutes * 60)) * 100;
+    if (percentage <= 20) return 'text-red-500';
+    if (percentage <= 50) return 'text-amber-500';
+    return 'text-green-500';
+  };
+
+  return (
+    <div className={`flex items-center gap-2 font-mono ${className}`}>
+      {isActive ? (
+        <Clock className={`${getTimerColor()} animate-pulse`} size={20} />
+      ) : (
+        <CircleOff className="text-red-500" size={20} />
+      )}
+      <span className={`text-xl font-bold ${getTimerColor()}`}>
+        {formatTime(timeRemaining)}
+      </span>
+    </div>
+  );
+}

@@ -142,6 +142,21 @@ export default function ExamPage() {
     submitMutation.mutate();
   };
 
+  // Handle timer completion
+  const handleTimeUp = useCallback(() => {
+    setIsTimeUp(true);
+    toast({
+      title: "Time's Up!",
+      description: "Your exam time has expired. Your answers will be submitted automatically.",
+      variant: "destructive",
+    });
+    
+    // Give the user a moment to see the message before submitting
+    setTimeout(() => {
+      submitMutation.mutate();
+    }, 2000);
+  }, [submitMutation]);
+
   // Calculate progress - Fix NaN% issue
   const progress = answers && answers.length > 0
     ? Math.round((answers.filter(a => a !== -1).length / answers.length) * 100)
@@ -170,6 +185,131 @@ export default function ExamPage() {
       </div>
     );
   }
+
+  // Import components
+  import { Timer } from '../components/exam/timer';
+  import { QuestionNavigation } from '../components/exam/question-navigation';
+  import { QuestionCard } from '../components/exam/question-card';
+  
+  return (
+    <div className="container mx-auto px-4 py-6">
+      <div className="flex flex-col gap-6 md:flex-row">
+        {/* Main exam content */}
+        <div className="flex-1">
+          <div className="flex justify-between items-center mb-4">
+            <h1 className="text-2xl font-bold">Driving Theory Exam</h1>
+            <Timer 
+              initialTimeInMinutes={30} 
+              onTimeUp={handleTimeUp}
+              className="ml-auto"
+            />
+          </div>
+          
+          {/* Progress bar */}
+          <div className="mb-6">
+            <div className="flex justify-between text-sm text-muted-foreground mb-2">
+              <span>Completion Progress</span>
+              <span>{progress}%</span>
+            </div>
+            <Progress value={progress} className="h-2" />
+          </div>
+          
+          {/* Current question */}
+          {exam && questionDetails && (
+            <QuestionCard
+              question={questionDetails}
+              currentIndex={currentQuestionIndex}
+              totalQuestions={exam.questions.length}
+              selectedAnswer={answers[currentQuestionIndex]}
+              onAnswerSelect={(value) => handleAnswerSelect(value)}
+            />
+          )}
+          
+          {/* Navigation buttons */}
+          <div className="flex justify-between mt-6">
+            <Button
+              variant="outline"
+              onClick={handlePreviousQuestion}
+              disabled={currentQuestionIndex === 0}
+            >
+              Previous
+            </Button>
+            
+            {currentQuestionIndex < (exam?.questions.length || 0) - 1 ? (
+              <Button onClick={handleNextQuestion}>
+                Next
+              </Button>
+            ) : (
+              <Button 
+                variant="default" 
+                className="bg-green-600 hover:bg-green-700"
+                onClick={handleSubmit}
+              >
+                Submit Exam
+              </Button>
+            )}
+          </div>
+        </div>
+        
+        {/* Sidebar */}
+        <div className="w-full md:w-64 space-y-4">
+          <QuestionNavigation
+            totalQuestions={exam?.questions.length || 0}
+            currentQuestion={currentQuestionIndex}
+            answers={answers}
+            onQuestionSelect={(index) => setCurrentQuestionIndex(index)}
+          />
+          
+          <Card>
+            <CardContent className="p-4">
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Answered:</span>
+                  <span className="font-medium">{answers.filter(a => a !== -1).length} / {answers.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Remaining:</span>
+                  <span className="font-medium">{answers.filter(a => a === -1).length}</span>
+                </div>
+              </div>
+              
+              <Button 
+                variant="destructive" 
+                className="w-full mt-4"
+                onClick={handleSubmit}
+              >
+                Finish Exam
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+      
+      {/* Confirmation dialog */}
+      <Dialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Submit Exam</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p>You have {answers.filter(a => a === -1).length} unanswered questions. Are you sure you want to submit?</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSubmitDialog(false)}>Continue Exam</Button>
+            <Button 
+              variant="default" 
+              onClick={() => {
+                setShowSubmitDialog(false);
+                submitMutation.mutate();
+              }}
+            >
+              Submit Anyway
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 
   // Show confirmation dialog when there's no active exam
   if (!exam || exam.endTime) {
