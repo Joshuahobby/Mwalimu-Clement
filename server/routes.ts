@@ -584,22 +584,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Get questions for the exam using SQL
-      const questionIds = exam.questions.map(String);
-      const placeholders = questionIds.map((_, i) => `$${i + 1}`).join(', ');
-      const questionIdsList = questionIds.map(Number);
-      
+      // Get questions for the exam using proper PostgreSQL array syntax
       const examQuestions = await db.execute(
-        `SELECT * FROM questions WHERE id IN (${placeholders})`,
-        questionIdsList
+        `SELECT * FROM questions WHERE id = ANY($1::int[])`,
+        [exam.questions]
       );
 
-      if (examQuestions.length !== exam.questions.length) {
+      if (!Array.isArray(examQuestions) || examQuestions.length !== exam.questions.length) {
         console.error('Question fetch mismatch:', {
-          fetchedCount: examQuestions.length,
+          fetchedCount: Array.isArray(examQuestions) ? examQuestions.length : 0,
           expectedCount: exam.questions.length,
           examQuestions: exam.questions,
-          fetchedIds: examQuestions.map(q => q.id)
+          fetchedIds: Array.isArray(examQuestions) ? examQuestions.map(q => q.id) : []
         });
         throw new Error('Failed to fetch all exam questions');
       }
@@ -629,16 +625,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate score (percentage)
       const score = Math.round((correctCount / examQuestions.length) * 100);
 
-      // Update exam with answers and score using parameterized query
-      const [updatedExam] = await db
-        .update(exams)
-        .set({
-          answers: sql`ARRAY[${sql.join(answers.map(a => sql.literal(Number(a))), ',')}]::integer[]`,
-          score,
-          endTime: new Date()
-        })
-        .where(eq(exams.id, examId))
-        .returning();
+      // Update exam with answers and score using direct PostgreSQL array syntax
+      const [updatedExam] = await db.execute(
+        `UPDATE exams 
+         SET answers = $1::int[], 
+             score = $2, 
+             end_time = NOW() 
+         WHERE id = $3 
+         RETURNING *`,
+        [answers, score, examId]
+      );
 
       if (!updatedExam) {
         throw new Error('Failed to update exam record');
