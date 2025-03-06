@@ -113,11 +113,6 @@ export default function ExamPage() {
     },
   });
 
-  const handleTimeUp = () => {
-    setIsTimeUp(true);
-    setShowSubmitDialog(true);
-  };
-
   const handleSubmit = () => {
     if (!exam) {
       toast({
