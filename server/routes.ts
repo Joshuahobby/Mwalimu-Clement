@@ -268,8 +268,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(simulation);
   });
 
-  // Add these routes to the registerRoutes function after the existing exam simulation routes
-
   // Session heartbeat route
   app.post("/api/simulations/:id/heartbeat", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -585,15 +583,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Get questions for the exam - Fix the array casting issue
+      // Get questions for the exam using proper array handling
       const examQuestions = await db
         .select()
         .from(questions)
-        .where(sql`id = ANY(${exam.questions})`);
+        .where(sql`id = ANY(${sql.array(exam.questions, 'int4')})`);
 
-      // Calculate correct answers
+      if (examQuestions.length !== exam.questions.length) {
+        console.error('Mismatch between questions fetched and exam questions:', {
+          fetchedCount: examQuestions.length,
+          expectedCount: exam.questions.length,
+          examQuestions: exam.questions
+        });
+        throw new Error('Failed to fetch all exam questions');
+      }
+
+      // Calculate correct answers with proper type handling
       const correctCount = examQuestions.reduce((count, question, index) => {
-        return count + (answers[index] === question.correctAnswer ? 1 : 0);
+        const answer = answers[index];
+        const correct = question.correctAnswer;
+        return count + (Number(answer) === Number(correct) ? 1 : 0);
       }, 0);
 
       // Calculate score (percentage)
@@ -603,7 +612,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const [updatedExam] = await db
         .update(exams)
         .set({
-          answers,
+          answers: sql`array[${sql.join(answers.map(a => sql.literal(a)), ',')}]::integer[]`,
           score,
           endTime: new Date()
         })
@@ -613,7 +622,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Exam completed:', {
         id: updatedExam.id,
         score: updatedExam.score,
-        answers: updatedExam.answers
+        answers: updatedExam.answers,
+        questionCount: examQuestions.length
       });
 
       res.json(updatedExam);
@@ -621,7 +631,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error updating exam:', error);
       res.status(500).json({ 
         message: "Failed to update exam",
-        error: error instanceof Error ? error.message : "Unknown error"
+        error: error instanceof Error ? error.message : "Unknown error",
+        details: process.env.NODE_ENV === 'development' ? error : undefined
       });
     }
   });
