@@ -9,7 +9,7 @@ interface QuestionCardProps {
   question: Question;
   currentIndex?: number;
   totalQuestions?: number;
-  selectedAnswer: number;
+  selectedAnswer: number | null;
   onAnswer: (value: number) => void;
   showFeedback?: boolean;
   isReviewMode?: boolean;
@@ -28,6 +28,9 @@ export function QuestionCard({
   correctAnswer,
   className = '',
 }: QuestionCardProps) {
+  // Convert to string, using '-1' as default for no selection
+  const selectedValue = selectedAnswer !== null ? selectedAnswer.toString() : '-1';
+
   return (
     <Card className={cn('w-full transition-all duration-300', className)}>
       {(currentIndex !== undefined && totalQuestions) && (
@@ -50,7 +53,7 @@ export function QuestionCard({
           {!currentIndex && question.question}
         </div>
         <RadioGroup
-          value={selectedAnswer.toString()}
+          value={selectedValue}
           onValueChange={(value) => onAnswer(parseInt(value))}
           className="space-y-3"
           disabled={isReviewMode}

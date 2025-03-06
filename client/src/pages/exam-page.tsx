@@ -23,12 +23,12 @@ import {
 
 interface ExamData extends Exam {
   questions: number[];
-  answers: number[] | null;
+  answers: (number | null)[] | null;
 }
 
 export default function ExamPage() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<number[]>([]);
+  const [answers, setAnswers] = useState<(number | null)[]>([]);
   const [showConfirmation, setShowConfirmation] = useState(true);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   const [isTimeUp, setIsTimeUp] = useState(false);
@@ -63,7 +63,7 @@ export default function ExamPage() {
 
       const data = await response.json();
       setExamStartTime(startTime);
-      setAnswers(new Array(20).fill(-1));
+      setAnswers(new Array(20).fill(null)); // Initialize with null instead of -1
       setShowConfirmation(false);
       setCurrentQuestionIndex(0);
       return data;
@@ -86,7 +86,7 @@ export default function ExamPage() {
 
       const submissionAnswers = [...answers];
       while (submissionAnswers.length < exam.questions.length) {
-        submissionAnswers.push(-1);
+        submissionAnswers.push(null); // Push null instead of -1
       }
 
       const response = await apiRequest("PATCH", `/api/exams/${exam.id}`, {
@@ -136,7 +136,7 @@ export default function ExamPage() {
       return;
     }
 
-    const unansweredCount = answers.filter(a => a === -1).length;
+    const unansweredCount = answers.filter(a => a === null).length; // Check for null
     if (!isTimeUp && unansweredCount > 0) {
       setShowSubmitDialog(true);
       return;
@@ -180,7 +180,7 @@ export default function ExamPage() {
     );
   }
 
-  const progress = answers.filter(a => a !== -1).length / answers.length * 100;
+  const progress = answers.filter(a => a !== null).length / answers.length * 100; //Check for null
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -286,7 +286,7 @@ export default function ExamPage() {
             <DialogDescription>
               {isTimeUp
                 ? "Your time is up. Your exam will be submitted now."
-                : `You have ${answers.filter(a => a === -1).length} unanswered questions. Are you sure you want to submit?`}
+                : `You have ${answers.filter(a => a === null).length} unanswered questions. Are you sure you want to submit?`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
