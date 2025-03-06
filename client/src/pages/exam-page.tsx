@@ -142,8 +142,10 @@ export default function ExamPage() {
     submitMutation.mutate();
   };
 
-  // Calculate progress
-  const progress = answers ? (answers.filter(a => a !== -1).length / answers.length) * 100 : 0;
+  // Calculate progress - Fix NaN% issue
+  const progress = answers && answers.length > 0
+    ? Math.round((answers.filter(a => a !== -1).length / answers.length) * 100)
+    : 0;
 
   // Show loading state
   if (examLoading || questionsLoading || startExamMutation.isPending) {
@@ -251,9 +253,12 @@ export default function ExamPage() {
                 <div className="flex items-center gap-4">
                   <Progress value={progress} className="w-[200px]" />
                   <span className="text-sm font-medium">
-                    {Math.round(progress)}%
+                    {progress}% Complete
                   </span>
                 </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {answers?.filter(a => a !== -1).length || 0} of {answers?.length || 0} questions answered
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -325,7 +330,7 @@ export default function ExamPage() {
                   <div>
                     <h3 className="font-semibold mb-1">Important</h3>
                     <p className="text-sm text-muted-foreground">
-                      Make sure to review all questions before submitting. 
+                      Make sure to review all questions before submitting.
                       Unanswered questions will be marked as incorrect.
                     </p>
                   </div>
