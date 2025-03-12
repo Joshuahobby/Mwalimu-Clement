@@ -1,7 +1,10 @@
-import { Request, Response, NextFunction } from 'express';
-import { getPoolStatus, pool } from '../db';
 
-// Interface for query statistics
+import { Request, Response, NextFunction } from 'express';
+import { Pool } from 'pg';
+import { getPoolStatus, wakeupDatabase, checkDatabaseHealth } from '../db';
+import { pool } from '../db';
+
+// Type definitions
 interface QueryStats {
   count: number;
   totalTime: number;
@@ -18,12 +21,18 @@ class DatabaseMonitor {
   private queryStats: Map<string, QueryStats>;
   private slowQueryThreshold: number;
   private originalQuery: typeof pool.query;
+  private lastCheck: Date = new Date();
+  private isHealthy: boolean = false;
+  private stats: any = {};
 
   private constructor() {
     this.queryStats = new Map();
     this.slowQueryThreshold = 1000; // 1 second
     this.originalQuery = pool.query;
     this.startPeriodicCleanup();
+    this.updateStats();
+    // Update stats periodically
+    setInterval(() => this.updateStats(), 30000);
   }
 
   public static getInstance(): DatabaseMonitor {
@@ -37,6 +46,17 @@ class DatabaseMonitor {
     setInterval(() => {
       this.queryStats.clear();
     }, 3600000); // Clear stats every hour
+  }
+
+  async updateStats() {
+    try {
+      this.lastCheck = new Date();
+      this.isHealthy = await checkDatabaseHealth(1);
+      this.stats = getPoolStatus();
+    } catch (error) {
+      console.error('Error updating DB stats:', error);
+      this.isHealthy = false;
+    }
   }
 
   public recordQuery(query: string, time: number) {
@@ -64,6 +84,9 @@ class DatabaseMonitor {
 
   public getStats() {
     return {
+      isHealthy: this.isHealthy,
+      lastCheck: this.lastCheck.toISOString(),
+      poolStats: this.stats,
       queryStats: Object.fromEntries(this.queryStats),
       poolStatus: getPoolStatus(),
     };
@@ -110,6 +133,9 @@ class DatabaseMonitor {
 export const dbMonitor = DatabaseMonitor.getInstance();
 
 export function monitorDatabase(req: Request, res: Response, next: NextFunction) {
+  // Add database status to the request for logging/debugging
+  req.dbStatus = dbMonitor.getStats().isHealthy ? 'connected' : 'disconnected';
+
   // Monkey patch the query method to monitor execution time
   pool.query = dbMonitor.monitorQuery();
 
@@ -120,43 +146,6 @@ export function monitorDatabase(req: Request, res: Response, next: NextFunction)
 
   next();
 }
-
-import { Request, Response } from 'express';
-import { getPoolStatus, wakeupDatabase, checkDatabaseHealth } from '../db';
-
-// Database monitor for tracking connection status
-class DbMonitor {
-  private lastCheck: Date = new Date();
-  private isHealthy: boolean = false;
-  private stats: any = {};
-
-  constructor() {
-    this.updateStats();
-    // Update stats periodically
-    setInterval(() => this.updateStats(), 30000);
-  }
-
-  async updateStats() {
-    try {
-      this.lastCheck = new Date();
-      this.isHealthy = await checkDatabaseHealth(1);
-      this.stats = getPoolStatus();
-    } catch (error) {
-      console.error('Error updating DB stats:', error);
-      this.isHealthy = false;
-    }
-  }
-
-  getStats() {
-    return {
-      isHealthy: this.isHealthy,
-      lastCheck: this.lastCheck.toISOString(),
-      poolStats: this.stats
-    };
-  }
-}
-
-export const dbMonitor = new DbMonitor();
 
 // Health check endpoint middleware with wake-up capability
 export async function healthCheck(req: Request, res: Response) {
@@ -184,8 +173,11 @@ export async function healthCheck(req: Request, res: Response) {
   });
 }
 
-export function monitorDatabase(req: Request, res: Response, next: Function) {
-  // Add database status to the request for logging/debugging
-  req.dbStatus = dbMonitor.getStats().isHealthy ? 'connected' : 'disconnected';
-  next();
+// Extend Express Request interface to include dbStatus
+declare global {
+  namespace Express {
+    interface Request {
+      dbStatus?: string;
+    }
+  }
 }
