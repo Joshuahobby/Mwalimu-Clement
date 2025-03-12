@@ -11,13 +11,18 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-// Configure connection pool with optimal settings for scalability
+// Configure connection pool with optimized settings for serverless environment
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 20, // Maximum number of clients in the pool
+  max: 10, // Reduced max connections for serverless environment
   idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
+  connectionTimeoutMillis: 5000, // Increased timeout for initial connection
   maxUses: 7500, // Close connections after 7500 queries (to prevent memory leaks)
+  retryStrategy: (err, attempts) => {
+    // Automatic retry strategy for handling connection issues
+    console.log(`Database connection retry attempt ${attempts}`);
+    return Math.min(attempts * 500, 3000); // Progressive backoff with max 3s delay
+  }
 });
 
 // Add event listeners for monitoring
@@ -27,26 +32,40 @@ pool.on('connect', (client) => {
 
 pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
+  // Don't crash on connection errors, let retry strategy handle it
 });
 
 pool.on('remove', () => {
   console.log('Client removed from pool');
 });
 
-// Function to check database health
-export async function checkDatabaseHealth() {
-  try {
-    const client = await pool.connect();
+// Improved database health check with retry logic
+export async function checkDatabaseHealth(retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      await client.query('SELECT 1');
-      return true;
-    } finally {
-      client.release();
+      console.log(`Database health check attempt ${attempt}/${retries}`);
+      const client = await pool.connect();
+      try {
+        await client.query('SELECT 1');
+        console.log('Database health check successful');
+        return true;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      console.error(`Database health check failed (attempt ${attempt}/${retries}):`, error);
+      if (attempt < retries) {
+        // Wait with exponential backoff before retrying
+        const delay = Math.min(attempt * 1000, 3000);
+        console.log(`Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        console.error('All database connection attempts failed');
+        return false;
+      }
     }
-  } catch (error) {
-    console.error('Database health check failed:', error);
-    return false;
   }
+  return false;
 }
 
 // Create the drizzle DB instance with the configured pool
@@ -64,4 +83,22 @@ export function getPoolStatus() {
     idleCount: pool.idleCount,
     waitingCount: pool.waitingCount,
   };
+}
+
+// Function to wake up database if it's sleeping
+export async function wakeupDatabase() {
+  console.log('Attempting to wake up the database...');
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query('SELECT 1');
+      console.log('Database wakeup successful');
+      return true;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Database wakeup failed:', error);
+    return false;
+  }
 }

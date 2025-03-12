@@ -100,11 +100,14 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Check database health before starting the server
-  const isDatabaseHealthy = await checkDatabaseHealth();
+  // Check database health before starting the server with retries
+  const isDatabaseHealthy = await checkDatabaseHealth(5); // Try up to 5 times
   if (!isDatabaseHealthy) {
-    log('Database health check failed. Exiting...');
-    process.exit(1);
+    log('Database health check failed after multiple attempts. Starting server anyway but database features may be limited...');
+    // Continue running the server but with limited database functionality
+    // This allows users to at least access non-database parts of the application
+  } else {
+    log('Database connection successful');
   }
 
   const server = await registerRoutes(app);
@@ -127,9 +130,23 @@ app.use((req, res, next) => {
     log(`serving on port ${port}`);
   });
 
+  // Periodically check database health and attempt to wake it up if needed
+  const dbHealthCheckInterval = setInterval(async () => {
+    try {
+      const isHealthy = await checkDatabaseHealth(1); // Quick check with just one attempt
+      if (!isHealthy) {
+        log('Database appears to be sleeping, attempting to wake it up...');
+        await wakeupDatabase();
+      }
+    } catch (error) {
+      log('Error during periodic database health check:', error);
+    }
+  }, 60000); // Check every minute
+
   // Graceful shutdown with proper cleanup
   process.on('SIGTERM', async () => {
     log('SIGTERM received. Starting graceful shutdown...');
+    clearInterval(dbHealthCheckInterval);
     await Promise.all([
       new Promise((resolve) => server.close(resolve)),
       closePool() // Close database connections

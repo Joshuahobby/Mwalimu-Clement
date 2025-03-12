@@ -121,13 +121,71 @@ export function monitorDatabase(req: Request, res: Response, next: NextFunction)
   next();
 }
 
-// Health check endpoint middleware
-export function healthCheck(req: Request, res: Response) {
+import { Request, Response } from 'express';
+import { getPoolStatus, wakeupDatabase, checkDatabaseHealth } from '../db';
+
+// Database monitor for tracking connection status
+class DbMonitor {
+  private lastCheck: Date = new Date();
+  private isHealthy: boolean = false;
+  private stats: any = {};
+
+  constructor() {
+    this.updateStats();
+    // Update stats periodically
+    setInterval(() => this.updateStats(), 30000);
+  }
+
+  async updateStats() {
+    try {
+      this.lastCheck = new Date();
+      this.isHealthy = await checkDatabaseHealth(1);
+      this.stats = getPoolStatus();
+    } catch (error) {
+      console.error('Error updating DB stats:', error);
+      this.isHealthy = false;
+    }
+  }
+
+  getStats() {
+    return {
+      isHealthy: this.isHealthy,
+      lastCheck: this.lastCheck.toISOString(),
+      poolStats: this.stats
+    };
+  }
+}
+
+export const dbMonitor = new DbMonitor();
+
+// Health check endpoint middleware with wake-up capability
+export async function healthCheck(req: Request, res: Response) {
   const stats = dbMonitor.getStats();
+  const forceWakeup = req.query.wakeup === 'true';
+
+  if (forceWakeup || !stats.isHealthy) {
+    console.log('Health check requested database wakeup');
+    const wakeupSuccessful = await wakeupDatabase();
+    if (wakeupSuccessful) {
+      await dbMonitor.updateStats();
+    }
+  }
 
   res.json({
-    status: 'healthy',
+    status: stats.isHealthy ? 'healthy' : 'unhealthy',
     timestamp: new Date().toISOString(),
-    stats,
+    lastCheck: stats.lastCheck,
+    database: {
+      status: stats.isHealthy ? 'connected' : 'disconnected',
+      pool: stats.poolStats,
+      wakeupAttempted: forceWakeup || !stats.isHealthy,
+      wakeupSuccessful: stats.isHealthy
+    }
   });
+}
+
+export function monitorDatabase(req: Request, res: Response, next: Function) {
+  // Add database status to the request for logging/debugging
+  req.dbStatus = dbMonitor.getStats().isHealthy ? 'connected' : 'disconnected';
+  next();
 }
